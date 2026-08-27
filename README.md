@@ -1,12 +1,8 @@
 <div align="center">
 
-<img src="./assets/hero.svg" width="900" alt="um-dsh-websearch — Exa 网页搜索 · DeepSeek Harness 插件" />
+<img src="./Hero.png" width="900" alt="um-dsh-websearch — Exa 网页搜索 · DeepSeek Harness 插件" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE)
-[![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin)
-[![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json)
-
-<a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
+[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE) [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin) [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json) <a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 Exa 搜索能力——免密钥匿名模式、动态开关、中英双语设置卡片。
 

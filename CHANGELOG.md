@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Reworked bilingual READMEs with a modern minimal layout
+- Swap the README hero to the PNG banner and inline the badge row
 
 ## [0.2.0] - 2026-08-27
 
