@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Restyled bilingual READMEs for clarity and conciseness
+- Reworked bilingual READMEs with a modern minimal layout
 
 ## [0.2.0] - 2026-08-27
 
