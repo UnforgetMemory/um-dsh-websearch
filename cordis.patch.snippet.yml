@@ -1,0 +1,16 @@
+# 插入到 C:\Users\um\.dsh\profiles\web\cordis.patch.yml（顶层列表追加）
+#
+# 本文件是"全新安装"的出厂模板（enabled 默认 false，休眠挂载）。
+# 当前部署的实际状态已在此基础上前进一步：
+#   enabled: true + searchProvider: exa 覆盖 —— 以 profile 内 cordis.patch.yml 为准。
+
+# 1) 注册 provider（出厂休眠：enabled 默认 false）
+- insert:
+    - id: web-search-exa
+      name: um-dsh-websearch
+
+# （可选，切换默认搜索后端时才加）2) 把 ctx.web 的选择从 deepseek-official 改为 exa
+# - id: web
+#   name: "@deepseek-ai/dsh-web"
+#   config:
+#     searchProvider: exa
