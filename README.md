@@ -1,8 +1,6 @@
 <div align="center">
 
-# um-dsh-websearch
-
-**Exa 网页搜索 · DeepSeek Harness 插件**
+<img src="./assets/hero.svg" width="900" alt="um-dsh-websearch — Exa 网页搜索 · DeepSeek Harness 插件" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin)
@@ -10,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 Exa 搜索能力——免密钥匿名模式、动态开关、中英双语设置卡片。
 
-简体中文 · [English](./README.en.md)
+[English](./README.en.md) · 简体中文
 
 </div>
 

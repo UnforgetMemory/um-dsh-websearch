@@ -1,8 +1,6 @@
 <div align="center">
 
-# um-dsh-websearch
-
-**Exa web search · a DeepSeek Harness plugin**
+<img src="./assets/hero.svg" width="900" alt="um-dsh-websearch — Exa web search for DeepSeek Harness" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin)
