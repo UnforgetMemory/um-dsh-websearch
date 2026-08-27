@@ -14,3 +14,4 @@
 | MCP 协议版本 | 2025-06-18 | lib/index.js:31(MCP_PROTOCOL_VERSION) · lib/client.js(无) | 与 Exa 服务端协商；升级 Exa 时复核 |
 | MCP 搜索工具名 | web_search_exa | lib/index.js:33(MCP_TOOL_WEB_SEARCH) | 与 Exa MCP 工具清单一致；改名需同步 |
 | 卡片出厂默认镜像 | enabled:false · allowAnonymous:false · apiKeyEnv:"EXA_API_KEY" · baseURL:"https://api.exa.ai" · mcpBaseURL:"https://mcp.exa.ai/mcp" · numResults:5 · searchType:"auto" | lib/index.js:490-499(Config 默认) · lib/client.js:216-224(FIELD_DEFAULTS) · tests/render.test.mjs:86(makeSnapshot) | 覆盖徽章判定依赖三处一致；任一处改动需三处同步 |
+| README 徽章版本号 | 0.2.0 | README.md:9(version 徽章) · README.en.md:9(version 徽章) | 与 package.json version 联动；升版两处徽章同步 |
