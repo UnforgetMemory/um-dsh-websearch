@@ -1,80 +1,66 @@
 # um-dsh-websearch
 
-> Exa（exa.ai）网页搜索提供方 —— 一个为 DeepSeek Harness（DSH）打造的开源插件。
-> 产品形态对齐官方内建搜索插件，另增**动态开关**、**凭据服务密钥解析**与**中英双语设置卡片**。
-
-![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)
-![License: MIT](https://img.shields.io/badge/license-MIT-4d9fff?style=flat-square)
-![Node >= 20](https://img.shields.io/badge/node-%3E%3D20-2ea44f?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.2.0-8b5cf6?style=flat-square)
-
 **简体中文（默认）** · [English](./README.en.md)
 
----
+![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)
+![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)
+![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)
 
-## ✨ 特性
+Exa（exa.ai）网页搜索提供方，为 DeepSeek Harness 的 `ctx.web` seam 注入一个 `WebSearchProvider`。
+产品形态对齐官方 `@deepseek-ai/dsh-web-search-deepseek`，并内置**动态开关**与**中英双语设置卡片**。
 
-- **开箱即用的 Exa 搜索**：单一 provider、双传输通道——REST `/search`（认证）与匿名 MCP `web_search_exa`（免密钥），按配置自动切换
-- **动态开关 `enabled`**：出厂关闭，在 Settings 打开即热生效，**无需重启**
-- **免密钥匿名模式**：`allowAnonymous: true` 走 Exa 公开托管 MCP，零密钥返回真实结果
-- **凭据服务密钥解析**：字面密钥 → 凭据服务引用 → 启动环境变量，逐级回退
-- **双语设置卡片**：跟随 DSH 界面语言（简体中文 / English）实时切换
-- **实时可用性**：`available()` 按当前配置实时计算，开关即刻反映到选择器
+## 特性
 
-## 📦 安装（以 profile `web` 为例）
+- **双传输通道** — 认证 REST `/search` 或免密钥匿名 MCP（`web_search_exa`），按配置自动切换
+- **动态开关** — `enabled` 出厂关闭；设置页一键开启，下一次搜索即热生效，无需重启
+- **凭据灵活解析** — 字面密钥 → 凭据服务引用 → 启动环境变量逐级回退；匿名模式密钥整体不参与
+- **实时可用性** — `available()` 按当前配置实时计算，选择器即时反映开关与端点变更
+- **双语界面** — 设置卡片跟随 DSH 界面语言（简体中文 / English）实时切换
 
-1. 把本包装入 profile 的 `node_modules`（DSH 转发 pnpm，源码即改即生效）：
+## 快速开始
 
-   ```powershell
-   pnpm exec dsh plugin --profile web add <本仓库路径>
-   ```
+以 profile `web` 为例，两步挂载：
 
-2. 将补丁行插入用户补丁层（`$DSH_HOME/profiles/web/cordis.patch.yml` 顶层列表）：
+```powershell
+pnpm exec dsh plugin --profile web add <本仓库路径>
+```
 
-   ```yaml
-   - insert:
-       - id: web-search-exa
-         name: um-dsh-websearch
-   ```
+在 `$DSH_HOME/profiles/web/cordis.patch.yml` 顶层列表追加：
 
-3. 静态验证组合树（不启动进程），应能看到 `web-search-exa` 行：
+```yaml
+- insert:
+    - id: web-search-exa
+      name: um-dsh-websearch
+```
 
-   ```powershell
-   pnpm exec dsh --profile web --dump-config | Select-String exa
-   ```
+重启 DSH。到 **设置 → 插件配置 → Exa 网页搜索** 打开 `enabled` 即可使用。
 
-4. 重启 DSH 挂载（补丁层变更需重启生效）。
+## 配置
 
-> **exports 门禁坑**：client-modules 扫描器会 `require.resolve("<包名>/package.json")`，包的 `exports` 必须显式放行 `"./package.json"`，否则 `ERR_PACKAGE_PATH_NOT_EXPORTED` 会被扫描器静默吞掉、客户端半部不入图。
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | 动态开关；关闭时 provider 注册但不可选 |
+| `allowAnonymous` | `false` | 匿名模式：走 Exa 公开托管 MCP，免密钥 |
+| `apiKey` | omitted | 字面量密钥（secret），非空优先于引用；仅 REST 模式参与 |
+| `apiKeyEnv` | `EXA_API_KEY` | 凭据服务引用名（环境变量名）；密钥本体不落设置文档 |
+| `baseURL` | `https://api.exa.ai` | REST 基址，自动拼接 `/search`；`EXA_BASE_URL` 可覆盖 |
+| `mcpBaseURL` | `https://mcp.exa.ai/mcp` | 匿名 MCP 端点；可指向自建代理 |
+| `numResults` | `5` | 未指定 `maxResults` 时的默认条数（1–10） |
+| `searchType` | `auto` | `auto` / `neural` / `keyword`（仅 REST 模式生效） |
 
-## ⚙️ 配置（Settings → 插件配置 → Exa 网页搜索）
+基址层示例（设置页以它为 `base` 层，用户层在其上覆盖）：
 
-| 字段 | 类型 / 角色 | 默认 | 说明 |
-|---|---|---|---|
-| `enabled` | boolean | `false` | 动态开关；关闭时 provider 注册但不可选 |
-| `allowAnonymous` | boolean | `false` | 匿名开关；开启走 Exa 公开托管 MCP，无需密钥 |
-| `apiKey` | string · secret | — | 字面量密钥，仅覆盖下述引用（REST 模式） |
-| `apiKeyEnv` | string · credential-ref | `EXA_API_KEY` | 凭据服务引用名（环境变量名） |
-| `baseURL` | string | `https://api.exa.ai` | REST 基址（自动拼接 `/search`）；`EXA_BASE_URL` 可覆盖 |
-| `mcpBaseURL` | string | `https://mcp.exa.ai/mcp` | 匿名 MCP 端点；可指向自建代理 |
-| `numResults` | integer 1–10 | `5` | 未指定 `maxResults` 时的默认条数 |
-| `searchType` | string | `auto` | `auto` / `neural` / `keyword`（仅 REST） |
+```yaml
+- id: web-search-exa
+  name: um-dsh-websearch
+  config:
+    apiKeyEnv: EXA_API_KEY
+    searchType: neural
+```
 
-**密钥解析顺序**：`apiKey` 字面量 → 凭据服务（`apiKeyEnv`）→ 启动环境变量。
-`allowAnonymous: true` 时密钥整体不参与——默认走 Exa 公开托管 MCP，免密钥返回真实结果。
-
-## 🚀 使用
-
-### 动态开启
-
-1. **设置 → 插件 → 插件配置**，展开 **Exa 网页搜索** 卡片（与"网页搜索 / DeepSeek"卡并列）；
-2. 打开 `enabled` 并保存 —— 即刻热生效，无需重启。
-
-> 若部署把选择固定在 `deepseek-official`（未做下述覆盖），仅开 `enabled` 不会改变默认后端——这是刻意的零副作用设计。
+改动任意字段在下一次搜索即生效（live-reload）——provider 每次调用按当前 section 投影选项，选择器不会因端点或模式变更而闪烁。
 
 ### 切换默认搜索后端为 Exa
-
-在 `cordis.patch.yml` 追加（对 bundle 行 id 定向覆盖）：
 
 ```yaml
 - id: web
@@ -83,28 +69,44 @@
     searchProvider: exa
 ```
 
-改完重启一次；回滚 = 删除该覆盖并把 snippet 的 insert 行移除。
+追加后重启一次；回滚 = 删除该覆盖与上文 insert 行。
 
-## 🧱 工作原理
+## 工作原理
 
-每次搜索按**当前配置实时解析**选项快照（一次搜索绝不混用两套配置）：
+每次搜索解析一份**当前配置快照**，然后按模式分发：
 
-| 通道 | 触发 | 说明 |
-|---|---|---|
-| REST `/search` | `allowAnonymous: false` + 有效密钥 | Exa 认证 API；支持 `searchType`，请求带 `x-api-key` |
-| 匿名 MCP（streamable-HTTP） | `allowAnonymous: true` | `initialize` 握手 + `tools/call web_search_exa`，免密钥 |
+```mermaid
+flowchart LR
+    A[caller] --> B{allowAnonymous?}
+    B -- no --> C[REST /search<br/>x-api-key]
+    B -- yes --> D[MCP web_search_exa<br/>keyless]
+    C --> E[Exa]
+    D --> E
+```
 
-**可用性**实时计算：`enabled` 优先；匿名模式只看 `mcpBaseURL` 可解析性；认证模式再叠加密钥存在性（未被探测到/引用非法即不可用）。
+认证通道向 `{baseURL}/search` 发 REST 请求（支持 `searchType`）；匿名通道执行 MCP `initialize` 握手后调用 `web_search_exa` 工具。结果按 URL 去重，provider 不产生 `content`。失败以 `WebError` code 冒泡：`WEB_PROVIDER_CREDENTIAL_MISSING`（缺密钥）· `WEB_PROVIDER_ERROR`（HTTP/解析失败）· `WEB_ABORTED`（调用方取消）。
 
-**错误码**以 WebError 冒泡到工具层：`WEB_PROVIDER_CREDENTIAL_MISSING`（缺密钥）、`WEB_PROVIDER_ERROR`（HTTP/解析失败）、`WEB_ABORTED`（调用方取消）。
+### 已知限制
 
-## 📚 文档
+- 匿名模式可用性仅校验 `mcpBaseURL` 可解析，不探测端点可达性（`available()` 是同步契约）
+- 匿名通道的 snippet 取 MCP 返回的 Highlights 文本，无 `text`/`summary` 结构可用
+- `searchType` 仅 REST 通道生效；匿名 MCP 的检索语义由 Exa 托管服务决定
 
-- [DeepSeek Harness — Your first plugin](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/)
-- [DeepSeek Harness — 打包与安装插件](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish)
-- 本项目架构决策：[ADR-0001 — Exa 网页搜索接入](.um.agents/constraints/ADR-0001-web-search-exa.md)
-- 详细配置与排障见历史 README 内容（并入本文）
+## 排障
 
-## 📄 许可证
+<details><summary>组合验证 · exports 门禁 · 常见问题</summary>
 
-[MIT](./LICENSE) — 自由使用、修改与分发。
+- 组合验证：`pnpm exec dsh --profile web --dump-config | Select-String exa`
+- 客户端半部入图：重启后 `GET http://127.0.0.1:3080/plugins/um-dsh-websearch/client.js` 应返回模块内容；404 = 未被扫描
+- **exports 门禁**：client-modules 扫描器会 `require.resolve("<包名>/package.json")`——包的 `exports` 必须显式放行 `"./package.json"`，否则 `ERR_PACKAGE_PATH_NOT_EXPORTED` 被扫描器静默吞掉、客户端半部不入图
+- 架构决策：[ADR-0001 — Exa 网页搜索接入](.um.agents/constraints/ADR-0001-web-search-exa.md)
+
+</details>
+
+## 文档
+
+[DeepSeek Harness · 插件开发指南](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/) · [打包与安装插件](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish)
+
+## 许可证
+
+MIT © 2026 [UnforgetMemory](https://github.com/UnforgetMemory)
