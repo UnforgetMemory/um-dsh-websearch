@@ -1,0 +1,3 @@
+# 本地记忆不入库（规范见 um skill project-memory.md）
+memory/
+*.local.md
