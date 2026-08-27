@@ -6,7 +6,7 @@
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin)
 [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json)
 
-<a href="https://ko-fi.com/unforgetmemory" target="_blank"><img height="36" style="border:0px;height:36px" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
+<a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
 
 Exa search for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — keyless anonymous mode, a dynamic switch, and a bilingual settings card.
 
@@ -64,7 +64,7 @@ If this plugin helps you, consider buying me a coffee:
 
 <div align="center">
 
-<a href="https://ko-fi.com/unforgetmemory" target="_blank"><img height="36" style="border:0px;height:36px" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
+<a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
 
 </div>
 
