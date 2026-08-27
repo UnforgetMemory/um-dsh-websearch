@@ -56,6 +56,16 @@ Any field change takes effect on the next search.
 - Verify the composition: `pnpm exec dsh --profile web --dump-config | Select-String exa`
 - Exports gate & architecture decisions: [ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md)
 
+## Support
+
+If this plugin helps you, consider buying me a coffee:
+
+<div align="center">
+
+<a href="https://ko-fi.com/unforgetmemory" target="_blank"><img height="36" style="border:0px;height:36px" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
+
+</div>
+
 ## License
 
 [MIT](./LICENSE) © 2026 [UnforgetMemory](https://github.com/UnforgetMemory)

@@ -56,6 +56,16 @@ pnpm exec dsh plugin --profile web add <本仓库路径>
 - 组合验证：`pnpm exec dsh --profile web --dump-config | Select-String exa`
 - exports 门禁与架构决策：[ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md)
 
+## 支持
+
+如果这个项目对你有帮助，欢迎请我喝杯咖啡：
+
+<div align="center">
+
+<a href="https://ko-fi.com/unforgetmemory" target="_blank"><img height="36" style="border:0px;height:36px" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
+
+</div>
+
 ## 许可证
 
 [MIT](./LICENSE) © 2026 [UnforgetMemory](https://github.com/UnforgetMemory)
