@@ -6,6 +6,8 @@
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin)
 [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json)
 
+<a href="https://ko-fi.com/unforgetmemory" target="_blank"><img height="36" style="border:0px;height:36px" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
+
 Exa search for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — keyless anonymous mode, a dynamic switch, and a bilingual settings card.
 
 English · [简体中文](./README.md)
