@@ -14,7 +14,7 @@
 
 ## 特性
 
-- **双通道** — 认证 REST `/search`，或免密钥匿名 MCP，按配置自动切换
+- **双通道 + 双向降级** — 认证 REST `/search` 与免密钥匿名 MCP 互为主备；服务器拒绝时按开关自动降级
 - **动态开关** — `enabled` 出厂关闭，设置页一键开启，热生效免重启
 - **凭据灵活** — 字面密钥 → 凭据服务 → 环境变量，逐级回退
 - **双语界面** — 设置卡片跟随 DSH 界面语言实时切换
@@ -25,7 +25,7 @@
 pnpm exec dsh plugin --profile web add <本仓库路径>
 ```
 
-补丁层追加 `web-search-exa` 行，重启后在 **设置 → 插件配置 → Exa 网页搜索** 开启 `enabled`：
+补丁层追加 `web-search-exa` 行，重启后在 **设置 → 插件配置 → UM 网页搜索** 开启 `enabled`：
 
 ```yaml
 - insert:
@@ -38,7 +38,9 @@ pnpm exec dsh plugin --profile web add <本仓库路径>
 | Key | Default | 说明 |
 |---|---|---|
 | `enabled` | `false` | 动态开关 |
-| `allowAnonymous` | `false` | 免密钥匿名模式（公共 MCP） |
+| `allowAnonymous` | `false` | 免密钥匿名模式（公共 MCP），作为主路由 |
+| `fallbackToPaid` | `false` | 匿名失败回退付费（REST `/search` 密钥重试） |
+| `fallbackToAnonymous` | `false` | 付费失败回退匿名（公开 MCP 重试） |
 | `apiKey` | — | 字面量密钥，仅 REST |
 | `apiKeyEnv` | `EXA_API_KEY` | 凭据引用（环境变量名） |
 | `baseURL` | `https://api.exa.ai` | REST 基址，自动拼 `/search` |
@@ -51,6 +53,9 @@ pnpm exec dsh plugin --profile web add <本仓库路径>
 ## 使用与排障
 
 - 默认后端切为 Exa：`web` 行加 `config.searchProvider: exa`
+- 降级链：`allowAnonymous` 定主路由；`fallbackToPaid` / `fallbackToAnonymous`
+  开启另一向兜底。仅服务端拒绝降级（REST 401/402/403/429/5xx、匿名 HTTP/JSON-RPC
+  错误）；取消、密钥缺失、4xx 客户端错误与网络失败不降级
 - 组合验证：`pnpm exec dsh --profile web --dump-config | Select-String exa`
 - exports 门禁与架构决策：[ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md)
 

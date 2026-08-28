@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-28
+
+### Added
+
+- Two-way fallback chain between authenticated REST `/search` and keyless anonymous
+  MCP, enabled by `fallbackToPaid` / `fallbackToAnonymous`: a server-side rejection
+  on the primary transport retries through the other, while aborts, missing
+  credentials, client 4xx, contract, and network failures never degrade
+- Two fallback switches to the bilingual settings card
+
 ### Changed
 
+- Rebranded the settings card title and description to UM (UM 网页搜索 / 非官方网路搜索插件)
 - Reworked bilingual READMEs with a modern minimal layout
 - Swap the README hero to the PNG banner and inline the badge row
 

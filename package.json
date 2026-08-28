@@ -1,6 +1,6 @@
 {
 	"name": "um-dsh-websearch",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Exa (exa.ai) web search provider plugin for DeepSeek Harness, modeled after @deepseek-ai/dsh-web-search-deepseek: composition config template, credentials-service key resolution, live-reload availability, and a Settings-driven enabled switch.",
 	"type": "module",
 	"main": "lib/index.js",

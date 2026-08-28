@@ -96,3 +96,31 @@
   `web_search` 工具复验成功；套件 25 用例含 MCP 路径与解析器用例。
 - 后果：插件不内嵌链上支付；若 Exa 收紧匿名配额，匿名路径将以
   WEB_PROVIDER_ERROR 冒泡，用户可回退认证路径或自建代理。
+
+## 修订 A3：双向降级链（付费 ⇄ 匿名）+ 独立方向开关
+
+- 背景：A2 之后 `allowAnonymous` 是互斥路由开关：任一方失败都以
+  WEB_PROVIDER_ERROR 冒泡、由用户手动切换，没有自动降级，也没有
+  「匿名→付费」一侧的开关配置（审计缺口：付费坏 key/欠费、匿名配额不足
+  两端均无法成链）。
+- 决策：保留 `allowAnonymous` 为**主路由**（`true`=匿名优先 / `false`=付费
+  优先，向后兼容），新增两个方向开关，缺省均 `false`（单通道行为不变）：
+  - `fallbackToPaid`：匿名优先时，匿名字段被服务器拒绝（initialize 或
+    tools/call 的 HTTP 非 2xx / JSON-RPC 错误）→ 改用 REST `/search` 密钥重试；
+  - `fallbackToAnonymous`：付费优先时，REST 返回 401/402/403/429/5xx →
+    改用公开 MCP 匿名重试。
+- 降级边界（明确**不**降级）：`WEB_ABORTED`（用户取消）、
+  `WEB_PROVIDER_CREDENTIAL_MISSING`（密钥缺失属配置问题）、4xx 客户端错误
+  （400 等）、响应契约错误（无 results[]、载荷解析失败）、网络层失败
+  （fetch 异常）；降级前先确认目标通道可用（`canUse`：匿名通道 mcpBaseURL
+  可解析 / 付费通道密钥平面可通过），否则主错误原样冒泡。
+- 两路皆败：抛合并 WebError（code 仍 `WEB_PROVIDER_ERROR`，cause=次错误，
+  message 含两路原文），消费者按既有词汇表路由不受影响。
+- 可用性：`available()` = 主通道可用 ∨（降级开关开 ∧ 降级通道可用）；
+  `prime()` 在 `allowAnonymous + fallbackToPaid` 组合下也探测密钥平面，
+  使可用性如实反映降级链（原语义：匿名模式完全跳过密钥平面）。
+- 结果侧观测：seam 结果类型无 degraded 字段，静默降级不做结果标记
+  （留待后续，可加可选字段或日志）。
+- 证据：tests/plugin.test.mjs 新增 17 用例覆盖两端降级、不降级边界、
+  available/prime 链语义；卡片新增两开关（zh/en）；plugin 套件 25→42 全绿
+  （render 3 用例同步通过，共 45）。

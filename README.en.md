@@ -14,7 +14,7 @@ English · [简体中文](./README.md)
 
 ## Features
 
-- **Two transports** — authenticated REST `/search`, or keyless anonymous MCP, switched by config
+- **Two transports, two-way fallback** — authenticated REST `/search` and keyless anonymous MCP as primary/backup; a server-side rejection degrades automatically per switch
 - **Dynamic switch** — `enabled` ships off; flip it in Settings, live, no restart
 - **Flexible credentials** — literal key → credentials service → environment, with fallback
 - **Bilingual UI** — the settings card follows the DSH UI language in real time
@@ -25,7 +25,7 @@ English · [简体中文](./README.md)
 pnpm exec dsh plugin --profile web add <path-to-this-repo>
 ```
 
-Append the `web-search-exa` row to the patch layer, restart, then enable at **Settings → Plugin Config → Exa Web Search**:
+Append the `web-search-exa` row to the patch layer, restart, then enable at **Settings → Plugin Config → UM Web Search**:
 
 ```yaml
 - insert:
@@ -38,7 +38,9 @@ Append the `web-search-exa` row to the patch layer, restart, then enable at **Se
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Dynamic switch |
-| `allowAnonymous` | `false` | Keyless anonymous mode (public MCP) |
+| `allowAnonymous` | `false` | Keyless anonymous mode (public MCP), as the primary route |
+| `fallbackToPaid` | `false` | Degrade anonymous → paid (REST `/search` with key) |
+| `fallbackToAnonymous` | `false` | Degrade paid → anonymous (public MCP) |
 | `apiKey` | — | Literal key, REST only |
 | `apiKeyEnv` | `EXA_API_KEY` | Credential reference (an env var name) |
 | `baseURL` | `https://api.exa.ai` | REST base; `/search` appended |
@@ -51,6 +53,10 @@ Any field change takes effect on the next search.
 ## Usage & troubleshooting
 
 - Switch the default backend to Exa: add `config.searchProvider: exa` to the `web` row
+- Fallback chain: `allowAnonymous` picks the primary route; `fallbackToPaid` /
+  `fallbackToAnonymous` enable the other direction. Only server-side rejections
+  degrade (REST 401/402/403/429/5xx; anonymous HTTP/JSON-RPC errors); aborts,
+  missing credentials, 4xx client errors, and network failures never degrade
 - Verify the composition: `pnpm exec dsh --profile web --dump-config | Select-String exa`
 - Exports gate & architecture decisions: [ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md)
 
