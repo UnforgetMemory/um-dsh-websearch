@@ -7,7 +7,7 @@ function makeProvider(options) {
 	return new pkg.ExaSearchProvider(() => ({ ...options }));
 }
 
-const BASE = { enabled: true, baseURL: "https://api.exa.ai", apiKey: "k", resolveApiKey: async () => "k" };
+const BASE = { enabled: true, baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", apiKey: "k", resolveApiKey: async () => "k" };
 
 test("available(): disabled wins over everything", () => {
 	const p = makeProvider({ ...BASE, enabled: false });
@@ -312,6 +312,335 @@ test("search(): anonymous MCP tool error surfaces a provider error", async () =>
 		};
 		const p = makeProvider({ enabled: true, mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true });
 		await assert.rejects(p.search({ query: "q" }), /tool exploded|WEB_PROVIDER_ERROR/u);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+// ---- Fallback chain: helpers and cases ----
+
+/** Stub fetch by transport; `rest` receives `(callIndex, body)`, `mcp` `(method, headers)`. */
+function stubRoutes({ rest, mcp }) {
+	const calls = { rest: 0, mcp: [] };
+	globalThis.fetch = async (url, init) => {
+		const parsed = JSON.parse(init.body);
+		if (String(url).includes("/search")) {
+			calls.rest += 1;
+			return rest(calls.rest, parsed);
+		}
+		calls.mcp.push(parsed.method);
+		return mcp(parsed.method, init.headers);
+	};
+	return calls;
+}
+
+/** One REST round-trip: ok/error JSON body for one status. */
+function restRoundTrip(status, body) {
+	return () => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+}
+
+/** One anonymous MCP server: initialize succeeds (or fails at `initStatus`); tools/call yields an error or text. */
+function mcpRoundTrip({ error, toolText, initStatus }) {
+	return (method) => {
+		if (method === "initialize") {
+			if (initStatus !== void 0) return { ok: initStatus >= 200 && initStatus < 300, status: initStatus, headers: { get: () => null }, text: async () => "" };
+			return {
+				ok: true,
+				status: 200,
+				headers: { get: (name) => (String(name).toLowerCase() === "mcp-session-id" ? "sess-1" : null) },
+				text: async () => 'event: message\ndata: {"result":{"protocolVersion":"2025-06-18","serverInfo":{"name":"exa-search-server"}},"jsonrpc":"2.0","id":1}\n\n'
+			};
+		}
+		const payload = error !== void 0 ? { error, jsonrpc: "2.0", id: 2 } : { result: { content: [{ type: "text", text: toolText }] }, jsonrpc: "2.0", id: 2 };
+		return { ok: true, status: 200, headers: { get: () => null }, text: async () => `event: message\ndata: ${JSON.stringify(payload)}\n\n` };
+	};
+}
+
+const ANON_TOOL_TEXT = ["Title: Anonymous A", "URL: https://anon.example/", "Highlights:", "anonymous fallback body"].join("\n");
+
+test("fallback: paid 401 degrades to anonymous and returns the MCP result", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(401, { error: { message: "invalid key" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const result = await p.search({ query: "q" });
+		assert.equal(calls.rest, 1);
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(result.sources.length, 1);
+		assert.equal(result.sources[0].url, "https://anon.example/");
+		assert.equal(result.sources[0].snippet, "anonymous fallback body");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: paid rate limit (429) degrades to anonymous", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(429, { error: { message: "rate limited" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const result = await p.search({ query: "q" });
+		assert.equal(calls.rest, 1);
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(result.sources[0].url, "https://anon.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: paid server error (500) degrades to anonymous", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(500, { error: { message: "internal error" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const result = await p.search({ query: "q" });
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(result.sources[0].url, "https://anon.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: paid 400 (client error) does not degrade", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(400, { error: { message: "bad query" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		await assert.rejects(p.search({ query: "q" }), /bad query/u);
+		assert.equal(calls.mcp.length, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: paid rejection with the switch off keeps the hard error", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(401, { error: { message: "invalid key" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider(BASE); // fallbackToAnonymous defaults to false
+		await assert.rejects(p.search({ query: "q" }), /invalid key/u);
+		assert.equal(calls.mcp.length, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: paid rejection with an unconfigured anonymous base surfaces the primary error", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(401, { error: { message: "invalid key" } }),
+			mcp: mcpRoundTrip({ toolText: ANON_TOOL_TEXT })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true, mcpBaseURL: "not a url" });
+		await assert.rejects(p.search({ query: "q" }), /invalid key/u);
+		assert.equal(calls.mcp.length, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: anonymous tool rejection degrades to paid REST", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [{ url: "https://paid.example/", title: "Paid" }] }),
+			mcp: mcpRoundTrip({ error: { message: "quota exceeded" } })
+		});
+		const p = makeProvider({ ...BASE, allowAnonymous: true, fallbackToPaid: true });
+		const result = await p.search({ query: "q" });
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(calls.rest, 1);
+		assert.equal(result.sources.length, 1);
+		assert.equal(result.sources[0].url, "https://paid.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: anonymous initialize HTTP failure degrades to paid REST", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [{ url: "https://paid.example/", title: "Paid" }] }),
+			mcp: mcpRoundTrip({ initStatus: 503 })
+		});
+		const p = makeProvider({ ...BASE, allowAnonymous: true, fallbackToPaid: true });
+		const result = await p.search({ query: "q" });
+		assert.deepEqual(calls.mcp, ["initialize"]);
+		assert.equal(calls.rest, 1);
+		assert.equal(result.sources[0].url, "https://paid.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: anonymous rejection with the switch off keeps the hard error", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [{ url: "https://paid.example/" }] }),
+			mcp: mcpRoundTrip({ error: { message: "quota exceeded" } })
+		});
+		const p = makeProvider({ enabled: true, mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true });
+		await assert.rejects(p.search({ query: "q" }), /quota exceeded|WEB_PROVIDER_ERROR/u);
+		assert.equal(calls.rest, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: anonymous rejection with no paid key surfaces a combined error", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [] }),
+			mcp: mcpRoundTrip({ error: { message: "quota exceeded" } })
+		});
+		const p = makeProvider({ enabled: true, baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true, fallbackToPaid: true, resolveApiKey: async () => undefined });
+		const err = await p.search({ query: "q" }).then(() => null, (e) => e);
+		assert.ok(err !== null, "search must reject");
+		assert.match(err.message, /both transports/u);
+		assert.match(err.message, /quota exceeded/u);
+		assert.match(err.message, /no API key/u);
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(calls.rest, 0, "the credential gap blocks the REST call before any fetch");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: a probed-absent key short-circuits the paid fallback (primary error surfaces)", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [] }),
+			mcp: mcpRoundTrip({ error: { message: "quota exceeded" } })
+		});
+		const p = makeProvider({ enabled: true, baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true, fallbackToPaid: true, resolveApiKey: async () => undefined });
+		await p.prime(); // keyPresence converges to "no" before the search
+		assert.equal(p.keyPresence, "no");
+		await assert.rejects(p.search({ query: "q" }), /quota exceeded/u);
+		assert.equal(calls.rest, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: a pre-aborted primary never degrades", async () => {
+	const original = globalThis.fetch;
+	try {
+		let fetches = 0;
+		globalThis.fetch = async () => {
+			fetches += 1;
+			throw new Error("fetch must not run");
+		};
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const controller = new AbortController();
+		controller.abort();
+		await assert.rejects(p.search({ query: "x" }, controller.signal), /aborted/u);
+		assert.equal(fetches, 0);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("available(): paid plane unusable is still usable via an enabled anonymous fallback", async () => {
+	const p = makeProvider({ enabled: true, baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", apiKey: undefined, resolveApiKey: async () => undefined, fallbackToAnonymous: true });
+	await p.prime();
+	assert.equal(p.keyPresence, "no");
+	assert.equal(p.available(), true);
+});
+
+test("available(): paid plane unusable without the fallback flag stays unusable", async () => {
+	const p = makeProvider({ enabled: true, baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", apiKey: undefined, resolveApiKey: async () => undefined });
+	await p.prime();
+	assert.equal(p.available(), false);
+});
+
+test("available(): anonymous plane unusable is usable via an enabled paid fallback", () => {
+	const p = makeProvider({ enabled: true, mcpBaseURL: "not a url", baseURL: "https://api.exa.ai", apiKey: "k", allowAnonymous: true, fallbackToPaid: true });
+	assert.equal(p.available(), true);
+});
+
+test("available(): anonymous plane unusable without the paid fallback stays unusable", () => {
+	const p = makeProvider({ enabled: true, mcpBaseURL: "not a url", baseURL: "https://api.exa.ai", apiKey: "k", allowAnonymous: true });
+	assert.equal(p.available(), false);
+});
+
+test("prime(): anonymous primary probes the key plane only when a paid fallback is enabled", async () => {
+	const withFallback = makeProvider({ enabled: true, mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true, fallbackToPaid: true, resolveApiKey: async () => undefined });
+	await withFallback.prime();
+	assert.equal(withFallback.keyPresence, "no");
+	const without = makeProvider({ enabled: true, mcpBaseURL: "https://mcp.exa.ai/mcp", allowAnonymous: true, resolveApiKey: async () => undefined });
+	await without.prime();
+	assert.equal(without.keyPresence, "unknown");
+});
+
+test("fallback: paid primary succeeds with fallback on does not touch anonymous", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(200, { results: [{ url: "https://paid.example/", title: "Paid" }] }),
+			mcp: () => { throw new Error("MCP must not be called"); }
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const result = await p.search({ query: "hello" });
+		assert.equal(calls.rest, 1);
+		assert.equal(calls.mcp.length, 0);
+		assert.equal(result.sources[0].url, "https://paid.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: anonymous primary succeeds with fallback on does not touch paid", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: () => { throw new Error("REST must not be called"); },
+			mcp: mcpRoundTrip({ toolText: ["Title: Anon", "URL: https://anon.example/", "Highlights:", "anon body"].join("\n") })
+		});
+		const p = makeProvider({ ...BASE, allowAnonymous: true, fallbackToPaid: true });
+		const result = await p.search({ query: "hello" });
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
+		assert.equal(calls.rest, 0);
+		assert.equal(result.sources[0].url, "https://anon.example/");
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test("fallback: both transports server-reject produce a combined error", async () => {
+	const original = globalThis.fetch;
+	try {
+		const calls = stubRoutes({
+			rest: restRoundTrip(401, { error: { message: "invalid key" } }),
+			mcp: mcpRoundTrip({ error: { message: "anonymous quota exceeded" } })
+		});
+		const p = makeProvider({ ...BASE, fallbackToAnonymous: true });
+		const err = await p.search({ query: "q" }).then(() => null, (e) => e);
+		assert.ok(err !== null, "search must reject");
+		assert.match(err.message, /both transports/u);
+		assert.match(err.message, /invalid key/u);
+		assert.match(err.message, /anonymous quota exceeded/u);
+		assert.equal(calls.rest, 1);
+		assert.deepEqual(calls.mcp, ["initialize", "tools/call"]);
 	} finally {
 		globalThis.fetch = original;
 	}
