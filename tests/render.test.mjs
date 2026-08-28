@@ -83,7 +83,7 @@ function makeSnapshot() {
 		writable: true,
 		revision: 7,
 		base: { enabled: true },
-		value: { enabled: false, apiKeyEnv: "EXA_API_KEY", baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", numResults: 5, searchType: "auto" },
+		value: { enabled: false, allowAnonymous: false, fallbackToPaid: false, fallbackToAnonymous: false, apiKeyEnv: "EXA_API_KEY", baseURL: "https://api.exa.ai", mcpBaseURL: "https://mcp.exa.ai/mcp", numResults: 5, searchType: "auto" },
 		user: { enabled: false, numResults: 5 }
 	};
 }
@@ -142,11 +142,11 @@ test("card renders localized copy in en and zh from the same tree", () => {
 	assert.equal(descriptor.key, "web-search-exa");
 	assert.equal(descriptor.locale, "web-search-exa");
 	assert.equal(typeof descriptor.label, "function");
-	assert.equal(descriptor.label(), "Exa web search");
+	assert.equal(descriptor.label(), "UM web search");
 	const seed = [makeSnapshot(), true, {}, false, false];
 	const elEn = render(component, { t: (k) => en.localeStore["web-search-exa"].en[k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, seed);
 	const enText = textOf(elEn);
-	assert.match(enText, /Exa web search/);
+	assert.match(enText, /UM web search/);
 	assert.match(enText, /Enable Exa search/);
 	assert.match(enText, /Overridden/);
 	assert.match(enText, /Reset to default/);
@@ -161,11 +161,11 @@ test("card renders localized copy in en and zh from the same tree", () => {
 	const zh = makeHarness("zh");
 	const elZh = render(zh.ctx.captured.component, { __t: zh.locale.bind("web-search-exa"), __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, seed);
 	const zhText = collectText(elZh).join(" ");
-	assert.match(zhText, /Exa 网页搜索/);
+	assert.match(zhText, /UM 网页搜索/);
 	assert.match(zhText, /启用 Exa 搜索/);
 	assert.match(zhText, /已覆盖/);
 	assert.match(zhText, /恢复默认/);
-	assert.ok(!zhText.includes("Exa web search"), "en copy must not leak into zh render");
+	assert.ok(!zhText.includes("UM web search"), "en copy must not leak into zh render");
 });
 
 test("boolean header no longer toggles from element bubbling", () => {
@@ -220,7 +220,7 @@ ${injectedCss ?? ""}
 </style></head><body><div class="wrap"><div class="col"><h2>English</h2><ul>${html("en")}</ul></div><div class="col"><h2>中文</h2><ul>${html("zh")}</ul></div></div></body></html>`;
 	// The artifact is for human eyes; pin both languages so it cannot go
 	// blank silently.
-	for (const copy of ["Exa web search", "Enable Exa search", "Exa 网页搜索", "启用 Exa 搜索"]) {
+	for (const copy of ["UM web search", "Enable Exa search", "UM 网页搜索", "启用 Exa 搜索"]) {
 		assert.ok(page.includes(copy), `snapshot page renders ${copy}`);
 	}
 	const out = join(tmpdir(), "umexa-render-snapshot.html");
