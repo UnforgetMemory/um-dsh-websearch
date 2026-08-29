@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-29
+
+### Added
+
+- Dual-backend strategy behind one umbrella provider (canonical id `um-web-search`,
+  legacy `exa` alias): a plugin-level master switch, per-backend enable flags, a
+  `preferred` routing choice, and a cross-backend degrade on server-side rejection
+- Parallel (parallel.ai) backend: authenticated REST `/v1/search` and keyless
+  anonymous MCP (`web_search`), `turbo`/`fast`/`basic`/`advanced` mode presets, and
+  a 1–20 result cap
+- Layered settings card: a simplified first screen (master switch + live strategy
+  status) and an advanced-settings dialog with Overview / Exa / Parallel / About tabs
+- Effective-strategy panel: role badges, a primary-backend radio, and mismatch
+  warnings with a one-click swap when the preferred backend is disabled
+- About tab (version, source, author, Ko-fi support)
+- Dev version chain: base + 14-digit version code via `pnpm dev:version`, reset via
+  `pnpm dev:version:reset`
+
+### Changed
+
+- Rebuilt the card stylesheet under a `um-dsh-websearch-` class/token namespace with
+  theme-adaptive tinted badges and an adaptive dialog width (720px cap, viewport-aware)
+- Shortened the bilingual field copy; the master switch now reads "启用搜索 / Enable search"
+
 ## [0.3.0] - 2026-08-28
 
 ### Added

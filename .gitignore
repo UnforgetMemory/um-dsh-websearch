@@ -7,3 +7,13 @@ node_modules/
 # os
 .DS_Store
 Thumbs.db
+
+# env & secrets
+.env
+.env.*
+*.local
+
+# editor
+.vscode/
+.idea/
+*.iml

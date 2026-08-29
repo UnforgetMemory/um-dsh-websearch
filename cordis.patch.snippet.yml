@@ -1,16 +1,27 @@
 # 插入到 C:\Users\um\.dsh\profiles\web\cordis.patch.yml（顶层列表追加）
 #
-# 本文件是"全新安装"的出厂模板（enabled 默认 false，休眠挂载）。
-# 当前部署的实际状态已在此基础上前进一步：
-#   enabled: true + searchProvider: exa 覆盖 —— 以 profile 内 cordis.patch.yml 为准。
+# 本文件是"全新安装"的出厂模板（0.4.0：enabled 总开关默认 false，休眠挂载；
+# Exa 后端默认启用且优先，Parallel 后端默认关闭）。
+# 当前部署的实际状态以 profile 内 cordis.patch.yml 为准。
 
-# 1) 注册 provider（出厂休眠：enabled 默认 false）
+# 1) 注册插件（出厂休眠：enabled 默认 false）
 - insert:
     - id: web-search-exa
       name: um-dsh-websearch
 
-# （可选，切换默认搜索后端时才加）2) 把 ctx.web 的选择从 deepseek-official 改为 exa
+# （可选）2) 启用 Parallel 后端并调整策略：
+# - insert:
+#     - id: web-search-exa
+#       name: um-dsh-websearch
+#       config:
+#         enabled: true
+#         preferred: exa            # exa | parallel —— 哪个后端优先
+#         exaEnabled: true
+#         parallelEnabled: true     # 开启后，主后端被服务器拒绝时跨后端降级
+
+# （可选，切换默认搜索后端时才加）3) 把 ctx.web 的选择指到本插件：
+#   0.4.0 起规范 id 为 um-web-search；兼容别名 exa 继续有效（同一伞实例）。
 # - id: web
 #   name: "@deepseek-ai/dsh-web"
 #   config:
-#     searchProvider: exa
+#     searchProvider: um-web-search

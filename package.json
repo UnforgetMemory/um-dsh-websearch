@@ -1,13 +1,17 @@
 {
 	"name": "um-dsh-websearch",
-	"version": "0.3.0",
-	"description": "Exa (exa.ai) web search provider plugin for DeepSeek Harness, modeled after @deepseek-ai/dsh-web-search-deepseek: composition config template, credentials-service key resolution, live-reload availability, and a Settings-driven enabled switch.",
+	"version": "0.4.0",
+	"description": "Dual-backend (Exa + Parallel) web search provider plugin for DeepSeek Harness: strategy layer with master switch, per-backend enable and preferred routing, paid-REST/anonymous-MCP two-way fallback per backend, credentials-service key resolution, and a Settings-driven simplified card with a Modal details editor.",
 	"type": "module",
 	"main": "lib/index.js",
 	"exports": {
 		".": "./lib/index.js",
 		"./client": "./lib/client.js",
 		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"dev:version": "node scripts/dev-version.mjs",
+		"dev:version:reset": "node scripts/dev-version.mjs --reset"
 	},
 	"dsh": {
 		"client": {
