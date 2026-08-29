@@ -75,6 +75,18 @@ Append the `web-search-exa` row to the patch layer, restart, then enable at **Se
 
 Any field change takes effect on the next search.
 
+## Credentials
+
+- Keys never land in the settings document: the card only stores a reference
+  name (default `EXA_API_KEY` / `PARALLEL_API_KEY`). Store the key itself in the
+  **DSH credential store** (Settings → Models API-key area, under the matching
+  reference) or inject it as a launch-environment variable; resolution order:
+  literal `apiKey` → credential store → environment
+- Keyless play: enable anonymous mode on either backend to search through its
+  public MCP with no key at all
+- Parallel quick start: store the key under `PARALLEL_API_KEY` → set
+  `preferred: parallel` on the Overview tab → save, takes effect immediately
+
 ## Development versions
 
 Dev builds use a base-version + version-code scheme: `pnpm dev:version` produces
@@ -94,9 +106,13 @@ version only.
   through its transport chain, and a server-side rejection (401/402/403/429/5xx)
   degrades to the other backend when enabled and usable; aborts, missing credentials,
   4xx/422 client errors, and network failures never degrade
-- Verify the composition: `pnpm exec dsh --profile web --dump-config | Select-String exa`
+- The Overview tab shows the EFFECTIVE strategy: role badges (primary/fallback/off),
+  a "Set as primary" radio, and a warning with a one-click swap when the preferred
+  backend is disabled
+- Verify the composition: `pnpm exec dsh --profile web --dump-config | Select-String um-web-search`
 - Exports gate & architecture decisions: [ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md),
-  [ADR-0002](./.um.agents/constraints/ADR-0002-dual-backend-strategy.md);
+  [ADR-0002](./.um.agents/constraints/ADR-0002-dual-backend-strategy.md),
+  [ADR-0003](./.um.agents/constraints/ADR-0003-dev-version-chain.md);
   Parallel API facts: [research dossier](./.um.agents/constraints/parallel-search-research.md)
 
 ## Support

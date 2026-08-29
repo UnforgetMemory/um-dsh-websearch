@@ -75,6 +75,16 @@ pnpm exec dsh plugin --profile web add <本仓库路径>
 
 改动任意字段在下一次搜索即生效。
 
+## 凭据配置
+
+- 密钥本体**不进设置文档**：设置卡只填「引用名」（默认 `EXA_API_KEY` /
+  `PARALLEL_API_KEY`）。密钥写入 **DSH 凭据库**（设置 → Models 页的 API 密钥区，
+  按同名引用保存），或作为启动环境变量注入；解析顺序：字面量 `apiKey` →
+  凭据库 → 环境变量
+- 免密钥玩法：任一后端开启匿名模式即走公共 MCP，无需任何密钥
+- Parallel 快速启用：把 key 存入凭据库（引用名 `PARALLEL_API_KEY`）→ 综合页
+  `preferred: parallel` → 保存即生效
+
 ## 开发版本
 
 dev 构建使用「基版 + 版本码」方案：`pnpm dev:version` 生成形如
@@ -90,9 +100,12 @@ dev 版本不提交、不打 tag、不进 CHANGELOG（提交/发布仅针对基�
 - 策略语义：总开关关闭 → 整体不可用；主后端按其传输链服务，被服务器拒绝
   （401/402/403/429/5xx）且次后端启用可用时跨后端降级；取消、密钥缺失、
   4xx/422 客户端错误与网络失败不降级
-- 组合验证：`pnpm exec dsh --profile web --dump-config | Select-String exa`
+- 设置卡综合页显示**有效策略**：角色徽章（优先/备用/停用）、「设为优先」radio；
+  首选后端停用时会警示并可一键「交换优先」
+- 组合验证：`pnpm exec dsh --profile web --dump-config | Select-String um-web-search`
 - exports 门禁与架构决策：[ADR-0001](./.um.agents/constraints/ADR-0001-web-search-exa.md)、
-  [ADR-0002](./.um.agents/constraints/ADR-0002-dual-backend-strategy.md)；
+  [ADR-0002](./.um.agents/constraints/ADR-0002-dual-backend-strategy.md)、
+  [ADR-0003](./.um.agents/constraints/ADR-0003-dev-version-chain.md)；
   Parallel 接口事实：[调研档案](./.um.agents/constraints/parallel-search-research.md)
 
 ## 支持
