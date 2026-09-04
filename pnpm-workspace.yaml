@@ -1,0 +1,9 @@
+# pnpm ≥10 reads project settings from this file; the legacy `pnpm` key in
+# package.json is ignored. Keeps the dependency-family pins (see
+# .um.agents/constraints/hardcode-index.md) effective for transitive resolution.
+overrides:
+  '@deepseek-ai/cordis': 4.0.1
+  '@deepseek-ai/dsh-brand': 0.1.1-rc.2
+  '@deepseek-ai/dsh-invariants': 0.1.1-rc.2
+  '@deepseek-ai/dsh-llm': 0.1.1-rc.2
+  '@deepseek-ai/schemastery': 3.18.1

@@ -4,7 +4,7 @@
 
 | 语义 | 当前值 | 短路径（文件:行） | 同步说明 |
 |------|--------|-------------------|----------|
-| 依赖族版本钉 | dsh-web/dsh-credentials/dsh-settings/dsh-invariants/dsh-brand/dsh-llm @0.1.1-rc.2 · launch-environment @0.1.0-rc.8 · schemastery @3.18.1 · cordis @4.0.1 | package.json:25-35(deps) · package.json:36-44(overrides) | 升级 DSH 时全族同步，两处一致 |
+| 依赖族版本钉 | dsh-web/dsh-credentials/dsh-settings/dsh-invariants/dsh-brand/dsh-llm/launch-environment @0.1.1-rc.2 · schemastery @3.18.1 · cordis @4.0.1 | package.json:34-44(deps) · pnpm-workspace.yaml(overrides) | 升级 DSH 时全族同步，两处一致（pnpm ≥10 不再读 package.json 的 pnpm 键） |
 | bundle manifest | `dsh.bundle.patch: ./cordis.patch.yml` + 层内容（insert `um-web-search` → `um-dsh-websearch`） | package.json:17-24 · cordis.patch.yml:10-11 | 改行 id / 行 name 需与 lib 注册 id、README 层示例同步 |
 | 版本化字符串（VERSION → USER_AGENT + MCP clientInfo） | 0.4.0 | lib/index.js:30(VERSION) · lib/index.js:32(USER_AGENT) · lib/index.js:526(initialize clientInfo) · package.json:3 | VERSION 单源驱动前两者；与 package.json version 联动升 |
 | provider id 族 | 规范 `um-web-search` · 兼容别名 `exa` | lib/index.js:26 · lib/index.js:28 · lib/index.js:750-751(双注册) · profile cordis.patch.yml(searchProvider) · README×2 | 别名是同一伞实例薄包装；退役别名需四处同步 |
