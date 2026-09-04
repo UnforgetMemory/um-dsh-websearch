@@ -23,16 +23,21 @@ English · [简体中文](./README.md)
 ## Quick start
 
 ```powershell
-pnpm exec dsh plugin --profile web add <path-to-this-repo>
+pnpm exec dsh plugin --profile web add <path-to-this-repo>   # local checkout
+pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 ```
 
-Append the `web-search-exa` row to the patch layer, restart, then enable at **Settings → Plugins → UM Web Search**:
+The package declares `dsh.bundle`, so `dsh plugin add` appends it to `dsh.profile.bundles` and mounts its own patch layer (`cordis.patch.yml`) automatically — no manual profile row. The layer is:
 
 ```yaml
 - insert:
-    - id: web-search-exa
+    - id: um-web-search
       name: um-dsh-websearch
 ```
+
+Restart, then enable at **Settings → Plugins → UM Web Search** (`enabled` ships off).
+
+> **Migration note**: if you previously followed the old README and hand-inserted a row with `id: web-search-exa` into your profile's `cordis.patch.yml`, remove that row first — otherwise the bundle layer mounts alongside it and the plugin loads twice.
 
 ## Configuration
 

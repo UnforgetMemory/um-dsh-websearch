@@ -1,0 +1,11 @@
+# um-dsh-websearch bundle patch: the layer applied when a profile lists this
+# bundle (package.json `dsh.bundle.patch`). Rows reference the package by name
+# so Node module resolution finds the installed code; the same row's package
+# declares `dsh.client` (platform: web) + exports["./client"], which mounts
+# the settings card in the browser roster.
+#
+# Factory defaults (enabled: false, exa enabled + preferred, parallel off)
+# live in the Config schema — no config keys are needed here.
+- insert:
+    - id: um-web-search
+      name: um-dsh-websearch

@@ -1,25 +1,25 @@
-# 插入到 C:\Users\um\.dsh\profiles\web\cordis.patch.yml（顶层列表追加）
+# 本文件是用户侧可选覆盖模板。插件作为 dsh.bundle 安装时，注册行
+# （insert um-web-search → um-dsh-websearch）由包内 cordis.patch.yml 自动挂载，
+# 无需再手插。需要非出厂配置时，把下面的行追加到
+# C:\Users\um\.dsh\profiles\web\cordis.patch.yml（顶层列表追加），按 id 覆盖
+# bundle 层的行（整行 config 整体替换，须重述所需全部键）。
 #
-# 本文件是"全新安装"的出厂模板（0.4.0：enabled 总开关默认 false，休眠挂载；
-# Exa 后端默认启用且优先，Parallel 后端默认关闭）。
+# 注意：若该 profile 里还留着旧版手工插入的注册行（id: web-search-exa），
+# 请先删除，否则会与 bundle 层的新行同时存在、插件被重复加载。
+#
 # 当前部署的实际状态以 profile 内 cordis.patch.yml 为准。
 
-# 1) 注册插件（出厂休眠：enabled 默认 false）
+# 1) 覆盖注册行配置（bundle 层已注册；此处只需改策略）：
 - insert:
-    - id: web-search-exa
+    - id: um-web-search
       name: um-dsh-websearch
+      config:
+        enabled: true
+        preferred: exa            # exa | parallel —— 哪个后端优先
+        exaEnabled: true
+        parallelEnabled: true     # 开启后，主后端被服务器拒绝时跨后端降级
 
-# （可选）2) 启用 Parallel 后端并调整策略：
-# - insert:
-#     - id: web-search-exa
-#       name: um-dsh-websearch
-#       config:
-#         enabled: true
-#         preferred: exa            # exa | parallel —— 哪个后端优先
-#         exaEnabled: true
-#         parallelEnabled: true     # 开启后，主后端被服务器拒绝时跨后端降级
-
-# （可选，切换默认搜索后端时才加）3) 把 ctx.web 的选择指到本插件：
+# （可选，切换默认搜索后端时才加）2) 把 ctx.web 的选择指到本插件：
 #   0.4.0 起规范 id 为 um-web-search；兼容别名 exa 继续有效（同一伞实例）。
 # - id: web
 #   name: "@deepseek-ai/dsh-web"

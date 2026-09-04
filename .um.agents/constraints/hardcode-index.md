@@ -5,9 +5,10 @@
 | 语义 | 当前值 | 短路径（文件:行） | 同步说明 |
 |------|--------|-------------------|----------|
 | 依赖族版本钉 | dsh-web/dsh-credentials/dsh-settings/dsh-invariants/dsh-brand/dsh-llm @0.1.1-rc.2 · launch-environment @0.1.0-rc.8 · schemastery @3.18.1 · cordis @4.0.1 | package.json:25-35(deps) · package.json:36-44(overrides) | 升级 DSH 时全族同步，两处一致 |
+| bundle manifest | `dsh.bundle.patch: ./cordis.patch.yml` + 层内容（insert `um-web-search` → `um-dsh-websearch`） | package.json:17-24 · cordis.patch.yml:10-11 | 改行 id / 行 name 需与 lib 注册 id、README 层示例同步 |
 | 版本化字符串（VERSION → USER_AGENT + MCP clientInfo） | 0.4.0 | lib/index.js:30(VERSION) · lib/index.js:32(USER_AGENT) · lib/index.js:526(initialize clientInfo) · package.json:3 | VERSION 单源驱动前两者；与 package.json version 联动升 |
 | provider id 族 | 规范 `um-web-search` · 兼容别名 `exa` | lib/index.js:26 · lib/index.js:28 · lib/index.js:750-751(双注册) · profile cordis.patch.yml(searchProvider) · README×2 | 别名是同一伞实例薄包装；退役别名需四处同步 |
-| settings namespace | web-search-exa | lib/index.js:730(namespace) · lib/client.js:10(NS，同 slot key 与 locale 命名空间) · patch 行 id | 改名需四处同步（含语言包注册键）；存储用户层随名，改名=迁移 |
+| settings namespace | web-search-exa | lib/index.js:730(namespace) · lib/client.js:10(NS，同 slot key 与 locale 命名空间) | 改名需三处同步（含语言包注册键）；存储用户层随名，改名=迁移。组合层 patch 行 id 已改 `um-web-search`（仅组合层定位，与 namespace 无关，覆盖行按 id 匹配） |
 | 凭据引用名模式 | `^[A-Za-z_][A-Za-z0-9_]*$` | lib/index.js:111(API_KEY_ENV_PATTERN) · lib/client.js:16(KEY_REF_PATTERN) · dsh-credentials 内部 REF_PATTERN（未导出，两处本地镜像） | 源模式变更需三处同步 |
 | snippet 双上限 | 请求侧 700（REQUEST_SNIPPET_CHARACTERS）· 本地截断 800（SNIPPET_MAX_CHARACTERS） | lib/index.js:36 · lib/index.js:38 · 使用点 239(exa 请求) · 269(parallel excerpt_settings) · 318/354/373(截断) | 两值语义不同勿合并；调整任一需复核另一 |
 | Exa 匿名 MCP 端点 | https://mcp.exa.ai/mcp | lib/index.js:592 附近(DEFAULT_EXA_MCP_BASE_URL) · lib/client.js FIELD_DEFAULTS · README 表 | Exa 托管地址；自建代理时在设置里覆盖 mcpBaseURL |

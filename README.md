@@ -23,16 +23,21 @@
 ## 快速开始
 
 ```powershell
-pnpm exec dsh plugin --profile web add <本仓库路径>
+pnpm exec dsh plugin --profile web add <本仓库路径>     # 本地 checkout
+pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 ```
 
-补丁层追加 `web-search-exa` 行，重启后在 **设置 → 插件 → UM 网页搜索** 开启 `enabled`：
+本包声明了 `dsh.bundle`，`dsh plugin add` 会把它追加进 `dsh.profile.bundles` 并自动挂载其自带的补丁层（`cordis.patch.yml`），无需再往 profile 手工插行。该层的内容是：
 
 ```yaml
 - insert:
-    - id: web-search-exa
+    - id: um-web-search
       name: um-dsh-websearch
 ```
+
+安装后重启，在 **设置 → 插件 → UM 网页搜索** 开启 `enabled`（出厂默认关闭）。
+
+> **迁移提示**：若你按旧版 README 手工插过 `id: web-search-exa` 的注册行，请先从 profile 的 `cordis.patch.yml` 删除该行，否则 bundle 层挂载后会与新行同时存在、插件被重复加载。
 
 ## 配置
 
