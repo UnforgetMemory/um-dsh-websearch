@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-04
+
+### Added
+
+- `dsh.bundle` manifest (`dsh.bundle.patch: ./cordis.patch.yml`): `dsh plugin
+  --profile web add` now registers the package as a profile layer and mounts
+  its patch row automatically — no manual profile patch entry
+
+### Changed
+
+- Canonical patch row id `um-web-search` (was `web-search-exa`); the settings
+  namespace stays `web-search-exa`, so stored settings need no migration
+- Dependency family aligned at 0.1.1-rc.2 (`dsh-launch-environment`
+  0.1.0-rc.8 → 0.1.1-rc.2) with pnpm overrides moved to `pnpm-workspace.yaml`
+  (pnpm ≥10 ignores the package.json `pnpm` key)
+
+### Breaking Changes
+
+- Profiles that hand-inserted a patch row with the legacy id
+  `web-search-exa` must remove it before upgrading, or the plugin mounts twice
+
+### Fixed
+
+- `dsh plugin --profile web add` installing the package as a plain dependency
+  with the "declares no dsh.bundle" warning
+
 ## [0.4.0] - 2026-08-29
 
 ### Added

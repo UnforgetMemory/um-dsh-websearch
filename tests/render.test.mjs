@@ -356,7 +356,7 @@ test("modal renders four tabs; each tab hosts its own fields", () => {
 	assert.ok(!textParallel.includes("Set as primary"), "strategy controls stay off the parallel tab");
 	// About tab: metadata, no fields.
 	const textAbout = textOf(render(h.ctx.captured.component, { t, __scope: scope }, seedTab("about")));
-	for (const copy of ["0.4.0", "UnforgetMemory", "GitHub repository", "Ko-fi"]) {
+	for (const copy of ["0.5.0", "UnforgetMemory", "GitHub repository", "Ko-fi"]) {
 		assert.ok(textAbout.includes(copy), `about tab renders ${copy}`);
 	}
 	assert.ok(!textAbout.includes("Set as primary"), "about tab renders no fields");

@@ -1,6 +1,6 @@
 {
 	"name": "um-dsh-websearch",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"description": "Dual-backend (Exa + Parallel) web search provider plugin for DeepSeek Harness: strategy layer with master switch, per-backend enable and preferred routing, paid-REST/anonymous-MCP two-way fallback per backend, credentials-service key resolution, and a Settings-driven simplified card with a Modal details editor.",
 	"type": "module",
 	"main": "lib/index.js",
