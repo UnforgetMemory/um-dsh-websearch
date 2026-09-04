@@ -33,9 +33,18 @@ pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 - insert:
     - id: um-web-search
       name: um-dsh-websearch
+
+# 自动接管 web 行的 searchProvider（安装即生效，卸载随层移除）
+- id: web
+  config:
+    searchProvider: um-web-search
 ```
 
 安装后重启，在 **设置 → 插件 → UM 网页搜索** 开启 `enabled`（出厂默认关闭）。
+
+本 bundle 层会自动把 `web` 行的 `searchProvider` 设为 `um-web-search`——安装即接管默认搜索、卸载即自动回退到部署原默认后端（`deepseek-official`），无需再手工改 profile；部署如需固定其他后端，在 profile 的 `cordis.patch.yml` 显式写 `web` 行即可（后层覆盖前层）。
+
+> ⚠️ **接管窗口**：出厂默认 `enabled: false`，接管后、开启 `enabled` 之前搜索不可用——`web` 行已指向本插件，关闭状态下搜索返回 `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`。安装后请立即在设置卡开启 `enabled`。
 
 > **迁移提示**：若你按旧版 README 手工插过 `id: web-search-exa` 的注册行，请先从 profile 的 `cordis.patch.yml` 删除该行，否则 bundle 层挂载后会与新行同时存在、插件被重复加载。
 
@@ -100,8 +109,16 @@ dev 版本不提交、不打 tag、不进 CHANGELOG（提交/发布仅针对基�
 
 ## 使用与排障
 
-- 默认后端切为本插件：`web` 行加 `config.searchProvider: um-web-search`
-  （0.4.0 起规范 id；兼容别名 `exa` 继续有效，同一伞实例）
+- 默认后端：bundle 层自动把 `web` 行 `searchProvider` 置为 `um-web-search`
+  （0.4.0 起规范 id；兼容别名 `exa` 继续有效，同一伞实例）；部署显式固定后端时
+  在 profile patch 里覆盖即可
+- 自动选择边界：本插件注册 `um-web-search` 与兼容别名 `exa` 两个 provider id
+  且共享可用性——若部署越过 bundle 层且 `web` 行未配置 `searchProvider`，两 id
+  皆可用时会收到 seam 的 `WEB_PROVIDER_AMBIGUOUS`（手册选择语义：多可用且未配置
+  id → 报错而非先到先得），故无 bundle 的手工挂载必须显式写 `searchProvider`
+- 运行时语义：`searchProvider` 在 WebRuntime 构造期读取，`enabled` 开关热切换只
+  控制可用性（关闭时搜索报 `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`，不回退其他后端）；
+  恢复其他后端的唯一方式是卸载本插件（bundle 层随包移除）
 - 策略语义：总开关关闭 → 整体不可用；主后端按其传输链服务，被服务器拒绝
   （401/402/403/429/5xx）且次后端启用可用时跨后端降级；取消、密钥缺失、
   4xx/422 客户端错误与网络失败不降级
