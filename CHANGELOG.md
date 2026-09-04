@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bundle patch layer re-points the `web` row's `searchProvider` to
+  `um-web-search` on install — adding the plugin takes over default search,
+  removing it restores `deepseek-official` (deployments can still pin another
+  provider in their own patch layer)
+
+## [0.5.1] - 2026-09-04
+
+### Fixed
+
+- Declared the `@deepseek-ai/dsh-client-ui-settings-plugins` client inject edge
+  so the settings card bundle materializes after its slot host
+- Removed the unused `credentialRef` import
+
 ## [0.5.0] - 2026-09-04
 
 ### Added
