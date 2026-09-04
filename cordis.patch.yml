@@ -9,3 +9,18 @@
 - insert:
     - id: um-web-search
       name: um-dsh-websearch
+
+# Installing this bundle automatically re-points the web seam at this plugin,
+# so "enable/disable the plugin" = add/remove it from the profile bundles.
+#
+# Loader semantics (official manual): an id-targeted patch REPLACES the
+# targeted row's whole `config` — this entry must restate every key the `web`
+# row owns. It currently owns only `searchProvider` (dsh-base pins
+# `deepseek-official`); if dsh-base ever adds keys, restate them here too
+# (hardcode-index.md has the warning). Layer order: dsh-base → dsh-web-app →
+# this bundle → the profile's own cordis.patch.yml → --patch overlays, so a
+# deployment can still pin another provider explicitly; removing this bundle
+# restores the base row's default automatically.
+- id: web
+  config:
+    searchProvider: um-web-search
