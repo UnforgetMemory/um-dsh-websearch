@@ -1,7 +1,7 @@
 {
 	"name": "um-dsh-websearch",
-	"version": "0.5.1",
-	"description": "Dual-backend (Exa + Parallel) web search provider plugin for DeepSeek Harness: strategy layer with master switch, per-backend enable and preferred routing, paid-REST/anonymous-MCP two-way fallback per backend, credentials-service key resolution, and a Settings-driven simplified card with a Modal details editor.",
+	"version": "0.6.0",
+	"description": "Multi-provider (Exa + Parallel + DeepSeek Official) web search strategy plugin for DeepSeek Harness: ordered providers[] list with per-provider paid-REST / free-anonymous tiers, per-key two-way fallback switches, multi-key ordered/random strategy, concurrent fan-out, an in-memory TTL result cache, UM_WS_-namespaced credential references, and a Settings-driven card with a provider list and a Modal details editor.",
 	"type": "module",
 	"main": "lib/index.js",
 	"exports": {
@@ -12,7 +12,9 @@
 	},
 	"scripts": {
 		"dev:version": "node scripts/dev-version.mjs",
-		"dev:version:reset": "node scripts/dev-version.mjs --reset"
+		"dev:version:reset": "node scripts/dev-version.mjs --reset",
+		"test:visual": "playwright test",
+		"test:visual:update": "playwright test --update-snapshots"
 	},
 	"dsh": {
 		"bundle": {
@@ -34,6 +36,9 @@
 	"engines": {
 		"node": ">=20"
 	},
+	"devDependencies": {
+		"@playwright/test": "^1.62.1"
+	},
 	"dependencies": {
 		"@deepseek-ai/cordis": "4.0.1",
 		"@deepseek-ai/dsh-brand": "0.1.1-rc.2",
@@ -43,6 +48,7 @@
 		"@deepseek-ai/dsh-llm": "0.1.1-rc.2",
 		"@deepseek-ai/dsh-settings": "0.1.1-rc.2",
 		"@deepseek-ai/dsh-web": "0.1.1-rc.2",
+		"@deepseek-ai/dsh-web-search-deepseek": "0.1.1-rc.2",
 		"@deepseek-ai/schemastery": "3.18.1"
 	}
 }

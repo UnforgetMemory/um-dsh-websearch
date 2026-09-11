@@ -72,9 +72,21 @@ function render(component, props, seedStates) {
 	// The slot wrapper defers the card: run it once here so every later
 	// traversal reads the same seeded hook frame. Re-invoking it afterwards
 	// would consume fresh hook indices and silently reset open/staged.
-	const rendered = typeof el.type === "function" ? el.type(el.props ?? {}, ...(el.children ?? [])) : el;
+	const rendered = typeof el.type === "function" ? invokeComponent(el) : el;
 	for (const effect of frame.effects) effect();
 	return rendered;
+}
+
+/**
+ * Invoke a function-component vnode the way React does: the `key` prop is
+ * consumed for reconciliation and NEVER reaches component props. The
+ * KeyEditor "Add key crash" regression was exactly a component reading
+ * `props.key` — this emulation keeps that class of bug caught.
+ */
+function invokeComponent(node) {
+	const props = { ...(node.props ?? {}) };
+	delete props.key;
+	return node.type(props, ...(node.children ?? []));
 }
 
 function collectText(node, out = []) {
@@ -87,12 +99,18 @@ function collectText(node, out = []) {
 		for (const child of node) collectText(child, out);
 		return out;
 	}
-	if (typeof node.type === "function") return collectText(node.type(node.props ?? {}, ...(node.children ?? [])), out);
+	if (typeof node.type === "function") return collectText(invokeComponent(node), out);
 	for (const child of node.children ?? []) collectText(child, out);
 	return out;
 }
 
 const textOf = (el) => collectText(el).join("\u0001");
+
+const PROVIDERS = [
+	{ id: "exa", name: "Exa", enabled: true, primaryTier: "paid", paid: { enabled: true, baseURL: "https://api.exa.ai" }, free: { enabled: false, baseURL: "https://mcp.exa.ai/mcp" }, keys: [], keysStrategy: "ordered", numResults: 5, params: { searchType: "auto" } },
+	{ id: "parallel", name: "Parallel", enabled: false, primaryTier: "paid", paid: { enabled: false, baseURL: "https://api.parallel.ai" }, free: { enabled: false, baseURL: "https://search.parallel.ai/mcp" }, keys: [], keysStrategy: "ordered", numResults: 10, params: { mode: "fast" } },
+	{ id: "deepseek", name: "DeepSeek Official", enabled: false, primaryTier: "paid", paid: { enabled: false, baseURL: "https://api.deepseek.com/anthropic/v1" }, free: { enabled: false, baseURL: "" }, keys: [], keysStrategy: "ordered", numResults: 5, params: { model: "deepseek-v4-flash", maxUses: 5 } }
+];
 
 /** One ready scope snapshot: composition base + stored user overrides. */
 function makeSnapshot() {
@@ -103,52 +121,28 @@ function makeSnapshot() {
 		base: { enabled: true },
 		value: {
 			enabled: false,
-			preferred: "exa",
-			exaEnabled: true,
-			parallelEnabled: false,
-			allowAnonymous: false,
-			fallbackToPaid: false,
-			fallbackToAnonymous: false,
-			apiKeyEnv: "EXA_API_KEY",
-			baseURL: "https://api.exa.ai",
-			mcpBaseURL: "https://mcp.exa.ai/mcp",
-			numResults: 5,
-			searchType: "auto",
-			parallelAllowAnonymous: false,
-			parallelFallbackToPaid: false,
-			parallelFallbackToAnonymous: false,
-			parallelApiKeyEnv: "PARALLEL_API_KEY",
-			parallelBaseURL: "https://api.parallel.ai",
-			parallelMcpBaseURL: "https://search.parallel.ai/mcp",
-			parallelNumResults: 10,
-			parallelMode: "fast"
+			defaultProvider: "exa",
+			concurrency: 1,
+			cache: { enabled: false, ttlSeconds:60 },
+			providers: PROVIDERS
 		},
-		user: { enabled: false, numResults: 5 }
+		user: { enabled: false }
 	};
 }
-
-/** Fake settingsScope that records every set/unset so saves can be asserted. */
-function makeFakeScope() {
-	const calls = [];
-	return {
-		calls,
-		getSnapshot: makeSnapshot,
-		subscribe: () => () => {},
-		set: async (name, value) => {
-			calls.push([name, value]);
-		},
-		unset: async (name) => {
-			calls.push(["unset", name]);
-		}
-	};
-}
-
 
 function makeHarness(lang) {
 	const localeStore = {};
 	const calls = [];
-	// The slot wrapper clones its own scope over any test-passed __scope, so the
-	// harness's scope is the one ExaSettingsCard actually writes through.
+	const credStore = {};
+	const credentialsApi = {
+		describe: async ({ refs }) => ({
+			result: { value: { credentials: Object.fromEntries((refs ?? []).map((ref) => [ref, { configured: credStore[ref] !== undefined, writable: true }])) } }
+		}),
+		set: async ({ ref, value }) => {
+			calls.push(["credentials.set", ref, value]);
+			credStore[ref] = value;
+		}
+	};
 	const scope = {
 		getSnapshot: makeSnapshot,
 		subscribe: () => () => {},
@@ -160,7 +154,7 @@ function makeHarness(lang) {
 		}
 	};
 	const ctx = {
-		get: (name) => ({ slots: ctx.slots, settingsScope: { bind: () => scope }, locale })[name],
+		get: (name) => ({ slots: ctx.slots, settingsScope: { bind: () => scope }, locale, connection: { api: { credentials: credentialsApi } } })[name],
 		effect: (fn) => {
 			fn();
 			return () => {};
@@ -193,7 +187,7 @@ const findButtons = (node, out = []) => {
 	}
 	// Function components own their subtree: call them (children as rest args,
 	// matching the createElement stub) before looking for host buttons.
-	if (typeof node.type === "function") return findButtons(node.type(node.props ?? {}, ...(node.children ?? [])), out);
+	if (typeof node.type === "function") return findButtons(invokeComponent(node), out);
 	if (node.type === "button") out.push(node);
 	for (const child of node.children ?? []) findButtons(child, out);
 	return out;
@@ -206,7 +200,7 @@ test("card renders localized copy in en and zh from the same tree", () => {
 	assert.equal(descriptor.locale, "web-search-exa");
 	assert.equal(typeof descriptor.label, "function");
 	assert.equal(descriptor.label(), "UM web search");
-	const seed = [makeSnapshot(), true, {}, false, false];
+	const seed = [makeSnapshot(), true, {}, false, false, "providers", true];
 	const elEn = render(component, { t: (k) => en.localeStore["web-search-exa"].en[k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, seed);
 	const enText = textOf(elEn);
 	assert.match(enText, /UM web search/);
@@ -220,7 +214,7 @@ test("card renders localized copy in en and zh from the same tree", () => {
 	assert.ok(injectedCss !== null && injectedCss.includes(".um-dsh-websearch-dialog{width:min("), "dialog panel carries the adaptive width rule");
 	assert.ok(injectedCss !== null && injectedCss.includes("--um-dsh-websearch-tint-brand:color-mix"), "brand tint derives from theme tokens");
 	assert.ok(injectedCss !== null && !injectedCss.includes("#0b0b0e") && !injectedCss.includes("color:#fff"), "no hardcoded on-color anywhere — every tinted surface uses semantic text tokens");
-	// numResults stores the factory default: not a real override, no badge.
+	// enabled stores an override (user: false vs base: true): one reset badge.
 	const enButtons = findButtons(elEn).map((b) => collectText(b).join(""));
 	assert.equal(enButtons.filter((label) => label === "Reset to default").length, 1, "only the genuine override offers a reset");
 	assert.ok(enButtons.includes("Save") && enButtons.includes("Discard"), "footer actions render");
@@ -238,15 +232,15 @@ test("card renders localized copy in en and zh from the same tree", () => {
 
 test("boolean header no longer toggles from element bubbling", () => {
 	const h = makeHarness("en");
-	const el = render(h.ctx.captured.component, { __t: (k) => h.localeStore["web-search-exa"].en[k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, {}, false, false]);
-	// The field header div carries no onClick: only the switch itself toggles.
+	const el = render(h.ctx.captured.component, { __t: (k) => h.localeStore["web-search-exa"].en[k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, {}, false, false, "providers", true]);
+	// The field header label carries no onClick: only the switch itself toggles.
 	const fheads = [];
 	const walk = (node) => {
 		if (node == null || typeof node !== "object") return;
 		if (Array.isArray(node)) return node.forEach(walk);
 		// Function components may receive their subtree as rest args (Modal
 		// included): pass children through so the walk reaches the rows.
-		if (typeof node.type === "function") return walk(node.type(node.props ?? {}, ...(node.children ?? [])));
+		if (typeof node.type === "function") return walk(invokeComponent(node));
 		if (node.props?.className === "um-dsh-websearch-fhead") fheads.push(node);
 		(node.children ?? []).forEach(walk);
 	};
@@ -258,7 +252,7 @@ test("boolean header no longer toggles from element bubbling", () => {
 test("visual snapshot artifact renders both languages", () => {
 	const html = (lang) => {
 		const h = makeHarness(lang);
-		const el = render(h.ctx.captured.component, { __t: (k) => h.localeStore["web-search-exa"][lang][k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, {}, false, false]);
+		const el = render(h.ctx.captured.component, { __t: (k) => h.localeStore["web-search-exa"][lang][k] ?? k, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, {}, false, false, "providers", true]);
 		return toHtml(el);
 	};
 	const escape = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -266,7 +260,7 @@ test("visual snapshot artifact renders both languages", () => {
 		if (node == null || node === false || node === true) return "";
 		if (typeof node === "string" || typeof node === "number") return escape(String(node));
 		if (Array.isArray(node)) return node.map(toHtml).join("");
-		if (typeof node.type === "function") return toHtml(node.type(node.props ?? {}, ...(node.children ?? [])));
+		if (typeof node.type === "function") return toHtml(invokeComponent(node));
 		// Fragment sentinels are symbols: the children stand alone, no tag.
 		if (typeof node.type === "symbol") return (node.children ?? []).map(toHtml).join("");
 		const props = node.props ?? {};
@@ -298,162 +292,310 @@ ${injectedCss ?? ""}
 	assert.ok(injectedCss !== null, "card css captured for the snapshot");
 });
 
-test("first screen shows master row, status line and details button — no modal chrome", () => {
+test("first screen shows master row, status line, provider rows and details button — no modal chrome", () => {
 	const h = makeHarness("en");
-	const scope = makeFakeScope();
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
 	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	// modalOpen=false (position 1): the Modal's subtree is null.
-	const el = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, {}, false, false]);
+	const el = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, {}, false, false, "providers", true]);
 	const text = textOf(el);
 	assert.match(text, /Enable search/, "master enabled row renders on the first screen");
-	assert.match(text, /Strategy: Exa first · Parallel disabled/, "status line summarises the committed strategy");
+	assert.match(text, /Strategy: Exa · concurrency 1/, "status line summarises the committed strategy");
+	assert.match(text, /Concurrency/, "concurrency field renders on the first screen");
+	assert.match(text, /Enable result cache/, "cache switch renders on the first screen");
 	assert.match(text, /Advanced settings…/, "details button opens the Modal");
-	// No tab chrome and no detail-only fields while the Modal is closed.
+	assert.match(text, /Exa/), "provider rows render with their names";
+	assert.match(text, /Primary/), "role badges render";
+	// No tab chrome while the Modal is closed.
 	const tabs = [];
 	const walk = (node) => {
 		if (node == null || typeof node !== "object") return;
 		if (Array.isArray(node)) return node.forEach(walk);
-		if (typeof node.type === "function") return walk(node.type(node.props ?? {}, ...(node.children ?? [])));
+		if (typeof node.type === "function") return walk(invokeComponent(node));
 		if (node.props?.className === "um-dsh-websearch-tab") tabs.push(node);
 		(node.children ?? []).forEach(walk);
 	};
 	walk(el);
 	assert.equal(tabs.length, 0, "no tab buttons render on the first screen");
-	for (const label of ["Overview", "Preferred backend", "API key reference", "Parallel default result count (1–20)", "Parallel search mode"]) {
+	for (const label of ["Primary tier", "Paid REST tier", "Add key", "API key value"]) {
 		assert.ok(!text.includes(label), `detail "${label}" stays inside the Modal`);
 	}
 });
 
-test("modal renders four tabs; each tab hosts its own fields", () => {
+test("card header is a collapse button; the body renders only while open", () => {
 	const h = makeHarness("en");
-	const scope = makeFakeScope();
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
 	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	const seedTab = (tab) => [makeSnapshot(), true, {}, false, false, tab];
-	// Default (strategy) tab: four tab labels, strategy fields and status line.
-	const elDefault = render(h.ctx.captured.component, { t, __scope: scope }, seedTab("strategy"));
+	// Closed card: header button only, no body chrome.
+	const closed = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, {}, false, false, "providers", false]);
+	const closedText = textOf(closed);
+	const headerBtn = findButtons(closed).find((b) => b.props.className === "um-dsh-websearch-header");
+	assert.ok(headerBtn !== undefined, "the header is a button");
+	assert.equal(headerBtn.props["aria-expanded"], "false", "closed card declares aria-expanded=false");
+	assert.equal(headerBtn.props["aria-label"], "Show settings: UM web search", "header carries the show-settings label");
+	assert.ok(typeof headerBtn.props.onClick === "function", "header toggles on click");
+	assert.ok(!closedText.includes("Enable search"), "the body stays hidden while the card is closed");
+	// Open card: full first screen renders.
+	const open = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, {}, false, false, "providers", true]);
+	const openText = textOf(open);
+	const openBtn = findButtons(open).find((b) => b.props.className === "um-dsh-websearch-header");
+	assert.equal(openBtn.props["aria-expanded"], "true", "open card declares aria-expanded=true");
+	assert.equal(openBtn.props["aria-label"], "Hide settings: UM web search", "header carries the hide-settings label");
+	assert.match(openText, /Enable search/, "the body renders while the card is open");
+});
+
+test("modal renders one tab per provider plus about; the active provider's editor renders; about shows metadata", () => {
+	const h = makeHarness("en");
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const seedTab = (tab) => [makeSnapshot(), true, {}, false, false, tab, true];
+	// A stale id ("providers") resolves to the first provider (exa).
+	const elDefault = render(h.ctx.captured.component, { t, __scope: scope }, seedTab("providers"));
 	const textDefault = textOf(elDefault);
-	for (const label of ["Overview", "Exa", "Parallel", "About"]) {
-		assert.ok(textDefault.includes(label), `tab "${label}" renders`);
+	assert.ok(textDefault.includes("About"), "about tab label renders");
+	for (const label of ["Exa", "Parallel", "DeepSeek 官方"]) {
+		assert.ok(textDefault.includes(label), `provider tab renders "${label}"`);
 	}
-	assert.ok(textDefault.includes("Set as primary"), "strategy tab hosts the primary controls");
-	assert.ok(textDefault.includes("Strategy: Exa first · Parallel disabled"), "strategy tab repeats the status line");
-	assert.ok(!textDefault.includes("API key reference"), "exa fields stay off the strategy tab");
+	// Only the active provider's editor is mounted.
+	for (const label of ["Primary tier", "Paid REST tier", "Free anonymous tier", "Add key"]) {
+		assert.ok(textDefault.includes(label), `exa editor renders "${label}"`);
+	}
+	assert.ok(!textDefault.includes("Parallel search mode"), "inactive provider editors stay unmounted");
 	const tabButtons = findButtons(elDefault).filter((b) => b.props.role === "tab");
-	assert.equal(tabButtons.length, 4, "four tabs render");
+	assert.equal(tabButtons.length, 4, "four tabs render (three providers + about)");
 	assert.deepEqual(tabButtons.map((b) => b.props["aria-selected"]), [true, false, false, false], "only the active tab is selected");
 	assert.ok(typeof tabButtons[1].props.onClick === "function", "tabs carry a click handler");
-	// Exa tab.
-	const textExa = textOf(render(h.ctx.captured.component, { t, __scope: scope }, seedTab("exa")));
-	for (const label of ["Allow anonymous access", "Fall back to paid search", "API key reference", "REST endpoint base", "Default result count (1–10)", "Search type"]) {
-		assert.ok(textExa.includes(label), `exa field "${label}" renders on the exa tab`);
-	}
-	assert.ok(!textExa.includes("Parallel API key reference"), "parallel fields stay off the exa tab");
-	// Parallel tab.
-	const textParallel = textOf(render(h.ctx.captured.component, { t, __scope: scope }, seedTab("parallel")));
-	for (const label of ["Allow Parallel anonymous access", "Parallel API key reference", "Parallel default result count (1–20)", "Parallel search mode"]) {
-		assert.ok(textParallel.includes(label), `parallel field "${label}" renders on the parallel tab`);
-	}
-	assert.ok(!textParallel.includes("Set as primary"), "strategy controls stay off the parallel tab");
-	// About tab: metadata, no fields.
+	// Selecting the Parallel tab mounts that editor instead.
+	const elParallel = render(h.ctx.captured.component, { t, __scope: scope }, seedTab("parallel"));
+	const textParallel = textOf(elParallel);
+	assert.ok(textParallel.includes("Parallel search mode"), "parallel tab renders its own editor");
+	assert.ok(!textParallel.includes("Search type"), "exa editor is unmounted on the parallel tab");
 	const textAbout = textOf(render(h.ctx.captured.component, { t, __scope: scope }, seedTab("about")));
-	for (const copy of ["0.5.1", "UnforgetMemory", "GitHub repository", "Ko-fi"]) {
+	for (const copy of ["0.6.0", "UnforgetMemory", "GitHub repository", "Ko-fi"]) {
 		assert.ok(textAbout.includes(copy), `about tab renders ${copy}`);
 	}
-	assert.ok(!textAbout.includes("Set as primary"), "about tab renders no fields");
+	assert.ok(!textAbout.includes("Paid REST tier"), "provider editors stay off the about tab");
 });
 
-test("strategy summary follows preferred, exaEnabled and parallelEnabled", () => {
+test("status line follows the staged strategy and concurrency", () => {
 	const h = makeHarness("en");
-	const scope = makeFakeScope();
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
 	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	// The status line reads the effective values, so a staged edit updates it
-	// live even before save.
 	const cases = [
-		{ staged: {}, expect: "Strategy: Exa first · Parallel disabled" },
-		{ staged: { parallelEnabled: true }, expect: "Strategy: Exa first · Parallel on as fallback" },
-		{ staged: { preferred: "parallel", parallelEnabled: true }, expect: "Strategy: Parallel first · Exa on as fallback" },
-		// The effective strategy follows the enable flags, not the raw
-		// preference: a preferred backend that is off never claims "first".
-		{ staged: { preferred: "parallel" }, expect: "Strategy: served by Exa · Parallel is off" },
-		{ staged: { preferred: "parallel", exaEnabled: false, parallelEnabled: true }, expect: "Strategy: Parallel first · Exa disabled" },
-		{ staged: { exaEnabled: false, parallelEnabled: true }, expect: "Strategy: served by Parallel · Exa is off" },
-		{ staged: { preferred: "parallel", exaEnabled: false }, expect: "Strategy: both backends off · search unavailable" },
-		{ staged: { exaEnabled: false, parallelEnabled: false }, expect: "Strategy: both backends off · search unavailable" }
+		{ staged: {}, expect: "Strategy: Exa · concurrency 1" },
+		{ staged: { concurrency: "3" }, expect: "Strategy: Exa · concurrency 3" },
+		{ staged: { providers: [{ ...PROVIDERS[0], enabled: false }, PROVIDERS[1], PROVIDERS[2]] }, expect: "Strategy: all providers off · search unavailable" },
+		{ staged: { providers: [{ ...PROVIDERS[0], enabled: true }, { ...PROVIDERS[1], enabled: true }, PROVIDERS[2]] }, expect: "Strategy: Exa → Parallel · concurrency 1" }
 	];
 	for (const { staged, expect } of cases) {
-		const el = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, staged, false, false]);
-		const text = textOf(el);
-		assert.ok(text.includes(expect), `status line reflects ${JSON.stringify(staged)} → "${expect}"`);
+		const el = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), false, staged, false, false, "providers", true]);
+		assert.ok(textOf(el).includes(expect), `status line reflects ${JSON.stringify(staged)} → "${expect}"`);
 	}
 });
 
-test("strategy panel shows effective roles, warnings and swap control", () => {
-	const h = makeHarness("en");
-	const scope = makeFakeScope();
-	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	const renderTab = (staged) => render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, staged, false, false, "strategy"]);
-	// Default committed state: preferred=exa, exa on, parallel off.
-	const el = renderTab({});
-	const text = textOf(el);
-	assert.ok(text.includes("Set as primary"), "primary controls render");
-	assert.ok(text.includes("Primary") && text.includes("Off"), "roles render (exa primary, parallel off)");
-	const radios = findButtons(el).filter((b) => b.props.role === "radio");
-	assert.equal(radios.length, 2, "one primary radio per backend");
-	assert.deepEqual(radios.map((b) => b.props["aria-checked"]), [true, false], "only the preferred backend is checked");
-	assert.ok(!text.includes("The preferred backend is off"), "no warning while the preferred backend is enabled");
-	// Preferred disabled while the other backend is enabled: the effective
-	// strategy names the serving backend, the warning explains the mismatch,
-	// and a one-click swap fixes it.
-	const warn = renderTab({ preferred: "exa", exaEnabled: false, parallelEnabled: true });
-	const warnText = textOf(warn);
-	assert.ok(warnText.includes("Strategy: served by Parallel · Exa is off"), "effective strategy names the serving backend");
-	assert.ok(warnText.includes("The preferred backend is off; the other one serves."), "warning explains the mismatch");
-	assert.ok(warnText.includes("Swap"), "one-click swap is offered");
-	assert.ok(warnText.includes("Primary · off") && warnText.includes("Fallback"), "roles reflect the disabled preferred backend");
-	// Both backends off.
-	const off = renderTab({ exaEnabled: false, parallelEnabled: false });
-	const offText = textOf(off);
-	assert.ok(offText.includes("Strategy: both backends off · search unavailable"), "all-off strategy message");
-	assert.ok(offText.includes("Both backends are off; search is unavailable."), "all-off warning renders");
-});
-
-test("staging in the modal marks the header dirty and save writes coerced values through the scope", async () => {
+test("staging marks the header dirty and save writes coerced values through the scope", async () => {
 	const h = makeHarness("en");
 	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	// Two edits made inside the Modal, one of them a typed string that must be
-	// coerced to a number on save.
-	const staged = { parallelMode: "turbo", parallelNumResults: "15" };
-	const el = render(h.ctx.captured.component, { t }, [makeSnapshot(), true, staged, false, false]);
+	const staged = { concurrency: "3" };
+	const el = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, staged, false, false, "providers", true]);
 	const text = textOf(el);
 	assert.ok(text.includes("Unsaved"), "header carries the unsaved badge while the Modal holds edits");
 	const saveButtons = findButtons(el).filter((b) => collectText(b).join("") === "Save");
 	assert.ok(saveButtons.length >= 1, "save button renders in both footers");
-	const saveBtn = saveButtons[0];
-	assert.equal(saveBtn.props.disabled, false, "save is enabled for valid staged values");
-	await saveBtn.props.onClick();
-	// parallelNumResults must land as a number, not the raw typed string.
-	// dirtyNames follow ALL_FIELDS order, so parallelNumResults lands before
-	// parallelMode.
-	assert.deepEqual(h.calls, [
-		["parallelNumResults", 15],
-		["parallelMode", "turbo"]
-	], "save writes the coerced values through scope.set");
+	assert.equal(saveButtons[0].props.disabled, false, "save is enabled for valid staged values");
+	await saveButtons[0].props.onClick();
+	// concurrency must land as a number, not the raw typed string.
+	assert.deepEqual(h.calls, [["concurrency", 3]], "save writes the coerced value through scope.set");
 });
 
-test("parallelNumResults rejects 21 and accepts 20", () => {
+test("saving an edited providers list writes the whole array and clears the legacy flat keys", async () => {
 	const h = makeHarness("en");
-	const scope = makeFakeScope();
 	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
-	// 21 is above the ceiling: the field surfaces the range error and save is
-	// blocked by hasInvalid. The field lives on the parallel tab, so seed it.
-	const elBad = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, { parallelNumResults: 21 }, false, false, "parallel"]);
+	// Edit the parallel provider's enabled flag to true.
+	const edited = [PROVIDERS[0], { ...PROVIDERS[1], enabled: true }, PROVIDERS[2]];
+	const el = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, { providers: edited }, false, false, "providers", true]);
+	const saveBtn = findButtons(el).find((b) => collectText(b).join("") === "Save");
+	await saveBtn.props.onClick();
+	const setCalls = h.calls.filter(([name]) => name !== "unset");
+	assert.equal(setCalls.length, 1, "only the providers array is written");
+	assert.equal(setCalls[0][0], "providers");
+	assert.equal(setCalls[0][1][1].enabled, true, "the coerced array carries the edit");
+	assert.equal(setCalls[0][1].length, 3, "the whole providers array is stored");
+	const unsets = h.calls.filter(([name]) => name === "unset").map(([, key]) => key);
+	assert.equal(unsets.length, 21, "every legacy flat key is cleared after the new shape lands");
+	assert.ok(unsets.includes("preferred") && unsets.includes("allowAnonymous") && unsets.includes("parallelApiKeyEnv"), "legacy strategy keys are among the cleared");
+});
+
+test("invalid staged values block the save (numResults range, key reference grammar)", () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
+	const renderStaged = (staged) => render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, staged, false, false, "providers", true]);
+	// 21 is above the ceiling: the editor shows the range error and save is blocked.
+	const elBad = renderStaged({ providers: [{ ...PROVIDERS[0], numResults: 21 }, PROVIDERS[1], PROVIDERS[2]] });
 	assert.ok(textOf(elBad).includes("Enter an integer from 1 to 20"), "21 shows the range error message");
-	const saveBad = findButtons(elBad).find((b) => collectText(b).join("") === "Save");
-	assert.ok(saveBad, "save button still renders");
-	assert.equal(saveBad.props.disabled, true, "save is disabled while parallelNumResults is out of range");
-	// 20 is the inclusive ceiling: no error, save is enabled.
-	const elOk = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, { parallelNumResults: 20 }, false, false, "parallel"]);
-	assert.ok(!textOf(elOk).includes("Enter an integer from 1 to 20"), "20 is accepted with no error");
-	const saveOk = findButtons(elOk).find((b) => collectText(b).join("") === "Save");
-	assert.equal(saveOk.props.disabled, false, "save is enabled at the inclusive ceiling");
+	assert.equal(findButtons(elBad).find((b) => collectText(b).join("") === "Save").props.disabled, true, "save is disabled at the invalid count");
+	// A malformed key reference blocks the save too (defense in depth: refs are
+	// auto-generated by the UI now, but the validator still guards the config).
+	const elRef = renderStaged({ providers: [{ ...PROVIDERS[0], keys: [{ ref: "not a name", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] });
+	assert.equal(findButtons(elRef).find((b) => collectText(b).join("") === "Save").props.disabled, true, "save is disabled at the invalid reference");
+	// Concurrency out of range blocks the save.
+	const elConc = renderStaged({ concurrency: "9" });
+	assert.ok(textOf(elConc).includes("Enter an integer from 1 to 8"), "concurrency 9 shows its own range error");
+	assert.equal(findButtons(elConc).find((b) => collectText(b).join("") === "Save").props.disabled, true, "save is disabled at concurrency 9");
+});
+
+test("key editor rows never read the reserved key prop (real-React add-key crash regression)", () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
+	// The test React emulates real React by stripping `key` from component
+	// props. The previous code destructured `props.key` inside KeyEditor and
+	// crashed on "Add key" in the real settings page.
+	const staged = { providers: [{ ...PROVIDERS[0], keys: [{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] };
+	const el = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, staged, false, false, "exa", true]);
+	const text = textOf(el);
+	assert.match(text, /UM_WS_EXA_API_KEY/, "the auto-generated ref renders as the row title");
+	assert.match(text, /Not configured/, "the credential state badge renders");
+});
+
+test("adding a key generates the next credential reference automatically", () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const scope = {
+		getSnapshot: makeSnapshot,
+		subscribe: () => () => {},
+		set: async () => {},
+		unset: async () => {}
+	};
+	const states = [makeSnapshot(), true, { providers: [{ ...PROVIDERS[0], keys: [{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] }, false, false, "exa", true];
+	const el = render(h.ctx.captured.component, { t, __scope: scope }, states);
+	const addBtn = findButtons(el).find((b) => collectText(b).join("") === "Add key");
+	assert.ok(addBtn !== undefined, "the add-key button renders");
+	addBtn.props.onClick();
+	const el2 = render(h.ctx.captured.component, { t, __scope: scope }, states);
+	assert.match(textOf(el2), /UM_WS_EXA_API_KEY_1/, "the second key gets the _1 suffix");
+	assert.match(textOf(el2), /UM_WS_EXA_API_KEY/, "the first key keeps the base reference");
+});
+
+test("save writes staged key values through the credentials wire face, never into the config", async () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	// Note: the slot wrapper injects the harness-bound scope over any __scope
+	// prop, so every scope write lands in h.calls.
+	const states = [makeSnapshot(), true, { providers: [{ ...PROVIDERS[0], keys: [{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] }, false, false, "exa", true, { UM_WS_EXA_API_KEY: "sk-secret" }];
+	const el = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, states);
+	const saveBtn = findButtons(el).find((b) => collectText(b).join("") === "Save");
+	assert.equal(saveBtn.props.disabled, false, "a staged key value enables save");
+	await saveBtn.props.onClick();
+	const credCall = h.calls.find((c) => c[0] === "credentials.set");
+	assert.deepEqual(credCall, ["credentials.set", "UM_WS_EXA_API_KEY", "sk-secret"], "the value rides the credentials wire face");
+	const providersCall = h.calls.find((c) => c[0] === "providers");
+	assert.equal(JSON.stringify(providersCall[1][0].keys[0]).includes("sk-secret"), false, "the literal never lands in the config");
+});
+
+test("whitespace-only key values never count as dirty, and written values are trimmed", async () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const scope = { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} };
+	// Whitespace alone must not mark the form dirty (non-blank semantics).
+	const elBlank = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, {}, false, false, "exa", true, { UM_WS_EXA_API_KEY: "   " }]);
+	const blankSave = findButtons(elBlank).find((b) => collectText(b).join("") === "Save");
+	assert.equal(blankSave.props.disabled, true, "whitespace alone never marks the form dirty");
+	// A padded real value writes the trimmed literal.
+	const states = [makeSnapshot(), true, { providers: [{ ...PROVIDERS[0], keys: [{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] }, false, false, "exa", true, { UM_WS_EXA_API_KEY: "  sk-padded  " }];
+	const el = render(h.ctx.captured.component, { t, __scope: scope }, states);
+	const saveBtn = findButtons(el).find((b) => collectText(b).join("") === "Save");
+	await saveBtn.props.onClick();
+	const credCall = h.calls.find((c) => c[0] === "credentials.set");
+	assert.deepEqual(credCall, ["credentials.set", "UM_WS_EXA_API_KEY", "sk-padded"], "the written literal is trimmed");
+});
+
+test("key rows are accordion items — collapsed by default, exactly one open at a time", () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const scope = { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} };
+	const staged = { providers: [{ ...PROVIDERS[0], keys: [{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }, { ref: "UM_WS_EXA_API_KEY_1", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }] }, PROVIDERS[1], PROVIDERS[2]] };
+	// Default: every row collapsed — no value inputs render.
+	const collapsed = render(h.ctx.captured.component, { t, __scope: scope }, [makeSnapshot(), true, staged, false, false, "exa", true]);
+	assert.ok(!textOf(collapsed).includes("Written to the DSH credential store under the reference above"), "collapsed rows hide the value field");
+	// Accordion state lives after the card states: 8=credStates, 9=openKey.
+	// NB: every render() must receive its OWN seed array — the reset effect
+	// rewrites index 2 (staged) in the shared array after each frame.
+	const freshSeeds = () => [makeSnapshot(), true, staged, false, false, "exa", true, {}, {}, "UM_WS_EXA_API_KEY_1"];
+	const elText = render(h.ctx.captured.component, { t, __scope: scope }, freshSeeds());
+	assert.match(textOf(elText), /Written to the DSH credential store under the reference above/, "the open row renders its value field");
+	const clickSeeds = freshSeeds();
+	const el = render(h.ctx.captured.component, { t, __scope: scope }, clickSeeds);
+	const toggles = findButtons(el).filter((b) => b.props.className === "um-dsh-websearch-keyToggle");
+	assert.deepEqual(toggles.map((b) => b.props["aria-expanded"]), ["false", "true"], "only the second row is open");
+	// Opening the first row closes the second (mutates this frame's openKey).
+	toggles[0].props.onClick();
+	const openSeeds = freshSeeds();
+	openSeeds[9] = clickSeeds[9];
+	const el2 = render(h.ctx.captured.component, { t, __scope: scope }, openSeeds);
+	const toggles2 = findButtons(el2).filter((b) => b.props.className === "um-dsh-websearch-keyToggle");
+	assert.deepEqual(toggles2.map((b) => b.props["aria-expanded"]), ["true", "false"], "opening one row closes the other");
+});
+
+test("staged numeric strings echo in the editor and coerce on save (review regression)", async () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	// A typed "15" must not be clobbered back to 5 by the display clone, and the
+	// save must land the coerced number.
+	const staged = { providers: [{ ...PROVIDERS[0], numResults: "15" }, PROVIDERS[1], PROVIDERS[2]] };
+	const el = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, [makeSnapshot(), true, staged, false, false, "providers", true]);
+	assert.ok(!textOf(el).includes("Enter an integer from 1 to 20"), "a valid typed string shows no range error");
+	const saveBtn = findButtons(el).find((b) => collectText(b).join("") === "Save");
+	assert.equal(saveBtn.props.disabled, false, "save is enabled for the typed string");
+	await saveBtn.props.onClick();
+	const setCall = h.calls.find(([name]) => name === "providers");
+	assert.equal(setCall[1][0].numResults, 15, "the typed string lands as a number");
+});
+
+test("the up/down buttons reorder providers and the save stores the new array order", async () => {
+	const h = makeHarness("en");
+	const t = (k) => h.localeStore["web-search-exa"].en[k] ?? k;
+	const states = [makeSnapshot(), true, {}, false, false, "providers", true];
+	const el = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, states);
+	const downButtons = findButtons(el).filter((b) => b.props["aria-label"] === "Move down");
+	assert.ok(downButtons.length >= 1, "each provider row carries a move-down button");
+	downButtons[0].props.onClick();
+	// Re-render over the mutated frame states so the tree reflects the reorder.
+	const el2 = render(h.ctx.captured.component, { t, __scope: { getSnapshot: makeSnapshot, subscribe: () => () => {}, set: async () => {}, unset: async () => {} } }, states);
+	assert.ok(textOf(el2).includes("Unsaved"), "reordering marks the form dirty");
+	const saveBtn = findButtons(el2).find((b) => collectText(b).join("") === "Save");
+	await saveBtn.props.onClick();
+	const setCall = h.calls.find(([name]) => name === "providers");
+	assert.ok(setCall, "save writes the providers array");
+	assert.equal(setCall[1][0].id, "parallel", "the moved provider now leads the stored array");
 });
