@@ -1,6 +1,10 @@
 # dependencies
 node_modules/
 
+# Playwright
+test-results/
+playwright-report/
+
 # logs
 *.log
 
@@ -17,3 +21,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+
+# agent runtime & backups
+.um.agents/tmp/
