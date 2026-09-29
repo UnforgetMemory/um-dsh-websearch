@@ -4,6 +4,10 @@
 # declares `dsh.client` (platform: web) + exports["./client"], which mounts
 # the settings card in the browser roster.
 #
+# The row id is also the settings namespace on DSH 0.1.7+ (the settings service
+# addresses an entry by `entry.options.id`), so renaming `um-web-search` moves
+# where the card reads and writes its configuration.
+#
 # Factory defaults (enabled: false, exa enabled + preferred, parallel off)
 # live in the Config schema — no config keys are needed here.
 - insert:
@@ -13,14 +17,24 @@
 # Installing this bundle automatically re-points the web seam at this plugin,
 # so "enable/disable the plugin" = add/remove it from the profile bundles.
 #
-# Loader semantics (official manual): an id-targeted patch REPLACES the
-# targeted row's whole `config` — this entry must restate every key the `web`
-# row owns. It currently owns only `searchProvider` (dsh-base pins
-# `deepseek-official`); if dsh-base ever adds keys, restate them here too
-# (hardcode-index.md has the warning). Layer order: dsh-base → dsh-web-app →
-# this bundle → the profile's own cordis.patch.yml → --patch overlays, so a
-# deployment can still pin another provider explicitly; removing this bundle
-# restores the base row's default automatically.
+# Loader semantics (official manual + dsh-app-boot lib/index.js:101-104): an
+# id-targeted patch REPLACES the targeted row's whole `config` — the overrides
+# are a shallow `target[key] = value` write, never a deep merge. This entry
+# must therefore restate EVERY key the `web` row owns. On DSH 0.1.7-alpha.2 the
+# base row owns two keys (dsh-base/cordis.patch.yml:471-475):
+#   searchProvider: deepseek-official
+#   fetchProvider: http
+# Restating only `searchProvider` silently deletes `fetchProvider`, which makes
+# `web_fetch` fall back to "the single usable provider" resolution and fail with
+# WEB_PROVIDER_AMBIGUOUS as soon as a second fetch provider is registered.
+# If dsh-base adds keys again, restate them here too (hardcode-index.md has the
+# warning).
+#
+# Layer order (dsh profile-boot:191-197): dsh-base → dsh-web-app → this bundle →
+# the profile's own cordis.patch.yml → $DSH_HOME/cordis.patch.yml → --patch
+# overlays, so a deployment can still pin another provider explicitly; removing
+# this bundle restores the base row's default automatically.
 - id: web
   config:
     searchProvider: um-web-search
+    fetchProvider: http

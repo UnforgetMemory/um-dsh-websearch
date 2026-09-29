@@ -8,9 +8,12 @@ import { nextVersion, baseVersion } from "./dev-version-core.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkgPath = join(root, "package.json");
+// `required: false` marks a constant a card rebuild may retire; a missing
+// optional target is skipped instead of failing the chain (ADR-0006: the
+// official-primitives card no longer carries an About tab).
 const TARGETS = [
-	{ file: "lib/index.js", needle: /const VERSION = "([^"]+)"/u, prefix: 'const VERSION = "' },
-	{ file: "lib/client.js", needle: /const ABOUT_VERSION = "([^"]+)"/u, prefix: 'const ABOUT_VERSION = "' }
+	{ file: "lib/index.js", needle: /const VERSION = "([^"]+)"/u, prefix: 'const VERSION = "', required: true },
+	{ file: "lib/client.js", needle: /const ABOUT_VERSION = "([^"]+)"/u, prefix: 'const ABOUT_VERSION = "', required: false }
 ];
 const historyPath = join(root, ".um.agents", "memory", "dev-versions.local.md");
 
@@ -25,7 +28,10 @@ for (const target of TARGETS) {
 	const path = join(root, target.file);
 	const raw = readFileSync(path, "utf8");
 	const match = target.needle.exec(raw);
-	if (match === null) throw new Error(`${target.file}: versioned constant not found`);
+	if (match === null) {
+		if (target.required === true) throw new Error(`${target.file}: versioned constant not found`);
+		continue;
+	}
 	if (match[1] !== current) throw new Error(`${target.file}: constant "${match[1]}" is out of sync with package.json "${current}" — fix manually before re-running`);
 	writeFileSync(path, raw.replace(target.needle, target.prefix + next + '"'), "utf8");
 }

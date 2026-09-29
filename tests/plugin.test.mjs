@@ -49,10 +49,16 @@ function makeUmbrella(config, creds = {}) {
 	const umbrella = new pkg.UmWebSearchProvider(() => pkg.resolveOptions(harness.ctx, config));
 	return { ...harness, umbrella };
 }
+/**
+ * Resolve a raw config through the exported schema and unwrap the live
+ * references: on DSH 0.1.7+ `Config(raw)` yields `Volatile` references whose
+ * `.get()` is the value an operation reads (ADR-0006 D2).
+ */
+const resolved = (raw) => pkg.liveSection(pkg.Config(raw));
 /** Apply the plugin for one fixed config; returns the registered providers. */
 function applyWithConfig(config, creds = {}) {
 	const harness = makeCtx(creds);
-	pkg.apply(harness.ctx, config);
+	pkg.apply(harness.ctx, pkg.Config(config));
 	return harness;
 }
 const withFetch = async (mock, run) => {
@@ -74,7 +80,7 @@ const exaResults = (results) => jsonOk({ results });
 // ---- config defaults + lenient enums ------------------------------------
 
 test("config: new-model defaults are safe (master off, 3 builtin providers)", () => {
-	const value = pkg.Config({});
+	const value = resolved({});
 	assert.equal(value.enabled, false);
 	assert.equal(value.defaultProvider, "exa");
 	assert.equal(value.concurrency, 1);
@@ -87,8 +93,26 @@ test("config: new-model defaults are safe (master off, 3 builtin providers)", ()
 	assert.equal(value.providers[2].enabled, false);
 });
 
+test("config: every editable field is volatile so the 0.1.7 settings form can serve it", () => {
+	// A field without `.volatile()` is invisible to `ctx.settings.describe()`
+	// and every write through the settings service is refused (ADR-0006 D2).
+	const flags = Object.fromEntries(Object.entries(pkg.Config.dict).map(([key, schema]) => [key, schema.meta?.volatile === true]));
+	assert.deepEqual(flags, {
+		enabled: true, defaultProvider: true, concurrency: true, cache: true, providers: true
+	});
+	// The array is volatile as a WHOLE: schemastery forbids volatile array
+	// elements, so the card writes `providers` with one path op.
+	assert.equal(pkg.Config.dict.providers.meta?.volatile, true);
+	assert.equal(pkg.Config.dict.providers.inner?.meta?.volatile, undefined);
+});
+
+test("config: the settings namespace is the Loader entry id", () => {
+	// DSH 0.1.7 addresses settings by entry id, not by a plugin-chosen string.
+	assert.equal(pkg.WEB_SEARCH_EXA_SETTINGS_NAMESPACE, "um-web-search");
+});
+
 test("config: provider/key defaults resolve for sparse entries", () => {
-	const value = pkg.Config({ providers: [{ id: "exa" }] });
+	const value = resolved({ providers: [{ id: "exa" }] });
 	assert.equal(value.providers[0].enabled, true);
 	assert.equal(value.providers[0].primaryTier, "free");
 	assert.equal(value.providers[0].paid.enabled, false);
@@ -98,7 +122,7 @@ test("config: provider/key defaults resolve for sparse entries", () => {
 
 test("config: lenient enum strings survive resolution; runtime normalizes them", () => {
 	// A hand-edited invalid enum value must not fail the section resolve.
-	const value = pkg.Config({ providers: [{ id: "exa", primaryTier: "turbo", keysStrategy: "weird" }] });
+	const value = resolved({ providers: [{ id: "exa", primaryTier: "turbo", keysStrategy: "weird" }] });
 	assert.equal(value.providers[0].primaryTier, "turbo");
 	assert.equal(value.providers[0].keysStrategy, "weird");
 	// The runtime projection normalizes both back to defaults.
@@ -114,11 +138,11 @@ test("config: invalid numeric ranges are rejected by the schema", () => {
 });
 
 test("validateConfig: duplicate provider ids are rejected", () => {
-	assert.throws(() => pkg.validateConfig(pkg.Config({ providers: [exaEntry(), { ...exaEntry(), id: "exa" }] })), /duplicate provider id "exa"/u);
+	assert.throws(() => pkg.validateConfig(resolved({ providers: [exaEntry(), { ...exaEntry(), id: "exa" }] })), /duplicate provider id "exa"/u);
 });
 
 test("validateConfig: empty provider id is rejected", () => {
-	assert.throws(() => pkg.validateConfig(pkg.Config({ providers: [{ id: "  " }] })), /non-empty id/u);
+	assert.throws(() => pkg.validateConfig(resolved({ providers: [{ id: "  " }] })), /non-empty id/u);
 });
 
 test("validateConfig: duplicate key references inside one provider are rejected", () => {
@@ -127,12 +151,12 @@ test("validateConfig: duplicate key references inside one provider are rejected"
 		{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false },
 		{ ref: "UM_WS_EXA_API_KEY", enabled: true, allowFreeToPaid: false, allowPaidToFree: false }
 	];
-	assert.throws(() => pkg.validateConfig(pkg.Config({ providers: [entry] })), /repeats the key reference/u);
+	assert.throws(() => pkg.validateConfig(resolved({ providers: [entry] })), /repeats the key reference/u);
 });
 
 test("validateConfig: defaultProvider must name a configured provider", () => {
-	assert.throws(() => pkg.validateConfig(pkg.Config({ defaultProvider: "brave" })), /does not name a configured provider/u);
-	assert.doesNotThrow(() => pkg.validateConfig(pkg.Config({ defaultProvider: "exa" })));
+	assert.throws(() => pkg.validateConfig(resolved({ defaultProvider: "brave" })), /does not name a configured provider/u);
+	assert.doesNotThrow(() => pkg.validateConfig(resolved({ defaultProvider: "exa" })));
 });
 
 // ---- legacy zero-storage migration --------------------------------------
@@ -632,6 +656,66 @@ test("apply: credentials/reference-updated re-primes participating refs", async 
 	handler(pkg.UM_WS_EXA_API_KEY);
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	assert.equal(umbrella.keyPresence.get(pkg.UM_WS_EXA_API_KEY), "yes");
+});
+
+test("apply: the legacy alias reports key presence, falling back to the legacy reference", () => {
+	const { registered } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, {});
+	const umbrella = registered.find((p) => p.id === "um-web-search");
+	const alias = registered.find((p) => p.id === "exa");
+	// Neither reference has been probed yet: the getter must not throw while it
+	// resolves the two constants.
+	assert.equal(alias.keyPresence, undefined);
+	umbrella.keyPresence.set(pkg.LEGACY_EXA_API_KEY_ENV, "yes");
+	assert.equal(alias.keyPresence, "yes", "the alias answers with the legacy reference when the UM_WS_ one is unknown");
+	umbrella.keyPresence.set(pkg.UM_WS_EXA_API_KEY, "no");
+	assert.equal(alias.keyPresence, "no", "a probed UM_WS_ answer wins over the legacy alias");
+});
+
+test("apply: cross-field validation rides the pre-persist internal/config waterfall", () => {
+	const { events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, {});
+	const handler = events.get("internal/config");
+	assert.equal(typeof handler, "function");
+	// A duplicate provider id is refused before anything reaches the profile patch.
+	assert.throws(() => handler({ providers: [exaEntry(), { ...exaEntry(), id: "exa" }] }, () => "next"), /duplicate provider id "exa"/u);
+	// The candidate is resolved through the schema first, so a sparse raw layer
+	// still validates against the defaults it would actually run with.
+	assert.equal(handler({ enabled: true }, () => "next"), "next");
+	assert.throws(() => handler({ defaultProvider: "ghost" }, () => "next"), /does not name a configured provider/u);
+});
+
+test("apply: loader/volatile-update drops the derived state (cache + prime)", async () => {
+	const creds = { [pkg.UM_WS_EXA_API_KEY]: { value: "k" } };
+	const { registered, events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, creds);
+	const umbrella = registered.find((p) => p.id === "um-web-search");
+	await umbrella.prime();
+	umbrella.cache.set("fingerprint", { expiresAt: Date.now() + 60_000, result: { sources: [] } });
+	const handler = events.get("loader/volatile-update");
+	assert.equal(typeof handler, "function");
+	handler([["enabled"]]);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	assert.equal(umbrella.cache.size, 0, "a volatile save invalidates the in-memory result cache");
+	assert.equal(umbrella.keyPresence.get(pkg.UM_WS_EXA_API_KEY), "yes", "the save re-primes credential presence");
+});
+
+test("apply: each operation reads the live section, so a saved value needs no remount", () => {
+	const harness = makeCtx({ [pkg.UM_WS_EXA_API_KEY]: { value: "k" } });
+	const config = pkg.Config({ enabled: true, providers: [exaEntry()] });
+	pkg.apply(harness.ctx, config);
+	const umbrella = harness.registered.find((p) => p.id === "um-web-search");
+	assert.equal(umbrella.resolveOptions().enabled, true);
+	// The Loader re-points the volatile reference in place when the user saves.
+	Object.defineProperty(config, "enabled", { value: pkg.Config({ enabled: false }).enabled, enumerable: true, writable: true, configurable: true });
+	assert.equal(umbrella.resolveOptions().enabled, false, "the next operation sees the saved value without a plugin remount");
+});
+
+test("apply: legacy flat keys survive the schema and keep driving the zero-storage migration", () => {
+	const harness = makeCtx({ [pkg.UM_WS_EXA_API_KEY]: { value: "k" } });
+	const config = pkg.Config({ enabled: true, preferred: "parallel", parallelEnabled: true, parallelApiKeyEnv: pkg.UM_WS_PARALLEL_API_KEY });
+	pkg.apply(harness.ctx, config);
+	const umbrella = harness.registered.find((p) => p.id === "um-web-search");
+	const opts = umbrella.resolveOptions();
+	assert.equal(opts.defaultProvider, "parallel");
+	assert.deepEqual(opts.providers.map((p) => p.id), ["exa", "parallel", "deepseek"]);
 });
 
 // ---- feature 7: concurrency fan-out ----------------------------------------

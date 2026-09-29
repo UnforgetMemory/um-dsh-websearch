@@ -1,27 +1,39 @@
-# 本文件是用户侧可选覆盖模板。插件作为 dsh.bundle 安装时，注册行
-# （insert um-web-search → um-dsh-websearch）由包内 cordis.patch.yml 自动挂载，
-# 无需再手插。需要非出厂配置时，把下面的行追加到
-# C:\Users\um\.dsh\profiles\web\cordis.patch.yml（顶层列表追加），按 id 覆盖
-# bundle 层的行（整行 config 整体替换，须重述所需全部键）。
+# 本文件是用户侧可选覆盖模板（DSH ≥ 0.1.7-alpha.2，插件 0.7.0 起）。
 #
-# 注意：若该 profile 里还留着旧版手工插入的注册行（id: web-search-exa），
-# 请先删除，否则会与 bundle 层的新行同时存在、插件被重复加载。
+# 插件作为 dsh.bundle 安装时，注册行（insert um-web-search → um-dsh-websearch）
+# 由包内 cordis.patch.yml 自动挂载，无需再手插；该 bundle 层同时把 base 的
+# `web` 行指向本插件。
 #
-# 当前部署的实际状态以 profile 内 cordis.patch.yml 为准。
+# 需要非出厂配置时，把下面的行追加到 profile 的 cordis.patch.yml
+# （例如 C:\Users\um\.dsh\profiles\web\cordis.patch.yml，顶层列表追加）。
+#
+# 关键语义（官方 loader）：按 id 定向的 patch **整体替换**目标行的 `config`
+# （dsh-app-boot lib/index.js:101-104 的浅写），不是深合并 —— 必须重述该行
+# 需要的全部键。
+#
+# 注意：0.1.7 起设置项的命名空间 = Loader 行 id（本插件为 um-web-search），
+# 设置卡写入的也是这一行的 config。手写覆盖与设置卡保存会写同一处，二者
+# 互相覆盖；日常改配置请直接用 设置 → 插件 → 网页搜索 卡片。
 
-# 1) 覆盖注册行配置（bundle 层已注册；此处只需改策略）：
-- insert:
-    - id: um-web-search
-      name: um-dsh-websearch
-      config:
-        enabled: true
-        preferred: exa            # exa | parallel —— 哪个后端优先
-        exaEnabled: true
-        parallelEnabled: true     # 开启后，主后端被服务器拒绝时跨后端降级
+# 1) 覆盖本插件注册行的配置（bundle 层已注册，这里按 id 覆盖，不要用 insert，
+#    否则会多出一行重复挂载）：
+# - id: um-web-search
+#   name: um-dsh-websearch
+#   config:
+#     enabled: true
+#     defaultProvider: exa        # 必须是 providers[] 中某个 provider 的 id
+#     concurrency: 1              # 1 = 顺序回退链；2–8 = 并发扇出
+#     cache:
+#       enabled: false
+#       ttlSeconds: 60
+#     # providers[] 数组索引即优先级；完整形状见 README 配置表。
+#     # 手写数组时注意：设置服务只能改 volatile 字段，数组必须整体书写。
 
-# （可选，切换默认搜索后端时才加）2) 把 ctx.web 的选择指到本插件：
-#   0.4.0 起规范 id 为 um-web-search；兼容别名 exa 继续有效（同一伞实例）。
+# （可选，切换默认搜索后端时才加）2) 把 ctx.web 的选择指到别的 provider：
+#    本 bundle 已自动接管 `web` 行；此处演示如何改回官方后端。
+#    注意必须重述 `web` 行当前拥有的**全部**键，否则被删掉的键会静默失效：
 # - id: web
 #   name: "@deepseek-ai/dsh-web"
 #   config:
-#     searchProvider: um-web-search
+#     searchProvider: deepseek-official   # 或 um-web-search（本插件）
+#     fetchProvider: http                 # 必写：base 行拥有该键，漏写即被删除
