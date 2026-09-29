@@ -471,3 +471,30 @@ test("state machine: random strategy with a single key is stable", async () => {
 	}, () => umbrella.search({ query: "q" }));
 	assert.deepEqual(headers, ["k"]);
 });
+
+// ---- ADR-0007 manifest contract -------------------------------------------
+// The support window is the shipped contract, and plain-semver resolution
+// (what pnpm uses) never matches 0.2.0-rc.* through a window that lacks a
+// `[0,2,0]` prerelease comparator — pin the exact range strings so a revert
+// to the old dual-track window cannot land silently.
+test("manifest: the dependency window matches the ADR-0007 single-track contract", async () => {
+	const { readFileSync } = await import("node:fs");
+	const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+	const WINDOW = ">=0.2.0-rc.1 <0.3.0";
+	assert.equal(manifest.engines.dsh, WINDOW);
+	for (const [name, range] of Object.entries(manifest.peerDependencies)) {
+		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(range, WINDOW, `peer ${name}`);
+	}
+	for (const [name, range] of Object.entries(manifest.dependencies)) {
+		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(range, WINDOW, `dep ${name}`);
+	}
+	for (const [name, version] of Object.entries(manifest.devDependencies)) {
+		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(version, "0.2.0-rc.2", `devDep ${name}`);
+	}
+	const workspace = readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8");
+	// dsh-llm must be overridden to rc.2 (pnpm resolves it to rc.1 while dsh-web's peer spec is exact rc.2)
+	assert.match(workspace, /'@deepseek-ai\/dsh-llm': 0\.2\.0-rc\.2/);
+	// the rc.2 family must ride the release-age whitelist or fresh installs fall back to rc.1
+	assert.match(workspace, /minimumReleaseAgeExclude:/);
+	assert.match(workspace, /'@deepseek-ai\/dsh-web@0\.2\.0-rc\.2'/);
+});

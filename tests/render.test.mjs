@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
  * its two field specs): the real one cannot be imported here because the
  * published bundle imports CSS modules and `@deepseek-ai/dsh-client-store`,
  * neither of which resolves outside a browser bundle. The copy below mirrors
- * `@deepseek-ai/dsh-client-ui-primitives@0.1.7-alpha.2` `lib/index.js:6417-6684`
+ * `@deepseek-ai/dsh-client-ui-primitives@0.2.0-rc.2` `lib/index.js:7104-7377`
  * line for line, because the card's staged-draft semantics (one `mutate` for
  * every scalar op, blank write-only drafts dropped, the staged baseline as the
  * revision fence) ARE what these tests assert.
@@ -73,7 +73,7 @@ const jsxRuntime = {
 };
 
 // ---- SettingsFormModel: mirror of the official primitives' form model. ----
-/** Whole-number field spec. Mirrors `settingsNumberField` (lib/index.js:6417). */
+/** Whole-number field spec. Mirrors `settingsNumberField` (lib/index.js:7110). */
 function settingsNumberField(field) {
 	return {
 		field,
@@ -86,7 +86,7 @@ function settingsNumberField(field) {
 		}
 	};
 }
-/** Free-text field spec. Mirrors `settingsTextField` (lib/index.js:6438). */
+/** Free-text field spec. Mirrors `settingsTextField` (lib/index.js:7131). */
 function settingsTextField(field) {
 	return {
 		field,
@@ -114,7 +114,7 @@ function createSnapshotStore(initial) {
 		}
 	};
 }
-/** Staged edits over one scope. Mirrors `SettingsFormModel` (lib/index.js:6458). */
+/** Staged edits over one scope. Mirrors `SettingsFormModel` (lib/index.js:7151). */
 class SettingsFormModel {
 	constructor(scope, specs, secrets = []) {
 		this.scope = scope;
