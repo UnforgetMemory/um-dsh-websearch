@@ -2,7 +2,7 @@
 
 <img src="./Hero.png" width="900" alt="um-dsh-websearch — Exa + Parallel + DeepSeek Official 多源网页搜索 · DeepSeek Harness 插件" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE) [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin) [![DSH >= 0.1.7-alpha.2](https://img.shields.io/badge/DSH-%3E%3D0.1.7--alpha.2-4d9fff?style=flat-square)](package.json) [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json) <a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
+[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE) [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin) [![DSH >= 0.2.0-rc.1](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.1-4d9fff?style=flat-square)](package.json) [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json) <a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 Exa + Parallel + DeepSeek Official 多源搜索能力——有序 provider 列表、paid/free 双档位门控回退、多密钥策略、并发扇出、乐观缓存与中英双语设置卡片。
 
@@ -27,7 +27,7 @@
 
 | 依赖 | 要求 |
 |---|---|
-| DeepSeek Harness | **≥ 0.1.7-alpha.2 且 < 0.3.0**（已在 0.1.7 线与 0.2.0-rc.2 实测；0.1.1-rc.2 系列不再支持） |
+| DeepSeek Harness | **≥ 0.2.0-rc.1 且 < 0.3.0**（已在 Desktop 0.2.0-rc.2 实测；0.1.7 及更早系列不再支持，见 ADR-0007） |
 | Node.js | ≥ 20 |
 
 ## 快速开始
@@ -36,6 +36,14 @@
 pnpm exec dsh plugin --profile web add <本仓库路径>     # 本地 checkout
 pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 ```
+
+> **Desktop（桌面版）**：desktop profile 由 Electron 应用独占管理，桌面内置的 dsh 命令（菜单栏
+> 「Manage dsh command」安装，或 `resources\runtime\cli\bin\dsh.cmd`）只放行 `plugin` 子命令，
+> 其余命令（如 `--dump-config`）对 desktop profile 一律拒绝。桌面端安装/更新即走上述同款
+> `dsh plugin --profile desktop add …`，或在应用的插件管理 UI 里操作；装完重启桌面应用生效。
+> 注意 pnpm 11 默认的 24 小时 release-age 门会拦住刚发布的 `0.2.0-rc.*`：桌面 profile 的
+> `pnpm-workspace.yaml` 需要 `minimumReleaseAgeExclude` 白名单（本仓库同款列表）才能解析到最新
+> 预发布版（ADR-0007）。
 
 本包声明了 `dsh.bundle`，`dsh plugin add` 会把它追加进 `dsh.profile.bundles` 并自动挂载其自带的补丁层（`cordis.patch.yml`），无需再往 profile 手工插行。该层的内容是：
 
@@ -60,6 +68,18 @@ pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 > ⚠️ **接管窗口**：出厂默认 `enabled: false`，接管后、开启 `enabled` 之前搜索不可用——`web` 行已指向本插件，关闭状态下搜索返回 `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`。安装后请立即在设置卡开启 `enabled`。
 
 > **迁移提示**：若你按旧版 README 手工插过 `id: web-search-exa` 的注册行，请先从 profile 的 `cordis.patch.yml` 删除该行，否则 bundle 层挂载后会与新行同时存在、插件被重复加载。
+
+## 迁移（0.7.0 窗口修订）
+
+- **需要 DSH ≥ 0.2.0-rc.1**（ADR-0007）：0.1.7 系列不再支持——初版 0.7.0 的支持窗口
+  `>=0.1.7-alpha.2 <0.3.0` 在普通 semver 下匹配不到 `0.2.0-rc.*`（预发布版只被同元组的预发布
+  比较器命中），宿主升到 0.2.0 桌面版后 pnpm 会把插件依赖闭包解析到 `0.1.7-rc.2`，与宿主形成
+  双份运行时副本；本修订收窄为 `>=0.2.0-rc.1 <0.3.0`，重装/刷新即与宿主同版。
+  0.1.7 宿主上修订版会被兼容性门禁拒装（fail-fast）。
+- 测试基线对齐 0.2.0-rc.2：devDependencies 与 overrides 全族迁移；
+  `SettingsFormModel` 镜像已对照 `dsh-client-ui-primitives@0.2.0-rc.2` 逐行复核（语义未变）。
+- 0.6.x → 0.7.0 的破坏性变更（设置命名空间迁到 profile patch 行 `config`、卡片重建为官方
+  primitives）见下方 0.7.0 迁移说明，仍然有效。
 
 ## 迁移（0.6.x → 0.7.0）
 
@@ -165,7 +185,8 @@ dev 版本不提交、不打 tag、不进 CHANGELOG（提交/发布仅针对基�
   [ADR-0003](./.um.agents/constraints/ADR-0003-dev-version-chain.md)、
   [ADR-0004](./.um.agents/constraints/ADR-0004-multi-source-strategy.md)、
   [ADR-0005](./.um.agents/constraints/ADR-0005-playwright-visual-testing.md)、
-  [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md)；
+  [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md)、
+  [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md)；
   Parallel 接口事实：[调研档案](./.um.agents/constraints/parallel-search-research.md)
 
 ## 支持

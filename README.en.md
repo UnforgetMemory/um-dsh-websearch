@@ -2,7 +2,7 @@
 
 <img src="./Hero.png" width="900" alt="um-dsh-websearch — Exa + Parallel + DeepSeek Official multi-source web search for DeepSeek Harness" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE) [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin) [![DSH >= 0.1.7-alpha.2](https://img.shields.io/badge/DSH-%3E%3D0.1.7--alpha.2-4d9fff?style=flat-square)](package.json) [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json) <a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
+[![License: MIT](https://img.shields.io/badge/License-MIT-4d9fff?style=flat-square)](./LICENSE) [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-4d9fff?style=flat-square)](https://github.com/topics/dsh-plugin) [![DSH >= 0.2.0-rc.1](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.1-4d9fff?style=flat-square)](package.json) [![Node >= 20](https://img.shields.io/badge/Node-%3E%3D20-2ea44f?style=flat-square)](package.json) <a href="https://ko-fi.com/unforgetmemory" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/donate-Ko--fi-ff5f5f?logo=ko-fi&style=flat-square" alt="Ko-fi" style="max-width:100%"></a>
 
 Exa + Parallel + DeepSeek Official multi-source search for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — an ordered provider list, paid/free tier-gated fallback, multi-key strategies, concurrent fan-out, an optimistic cache, and a bilingual settings card.
 
@@ -27,7 +27,7 @@ English · [简体中文](./README.md)
 
 | Dependency | Requirement |
 |---|---|
-| DeepSeek Harness | **≥ 0.1.7-alpha.2 and < 0.3.0** (verified on the 0.1.7 line and on 0.2.0-rc.2; the 0.1.1-rc.2 family is no longer supported) |
+| DeepSeek Harness | **≥ 0.2.0-rc.1 and < 0.3.0** (verified on Desktop 0.2.0-rc.2; the 0.1.7 and earlier families are no longer supported, see ADR-0007) |
 | Node.js | ≥ 20 |
 
 ## Quick start
@@ -36,6 +36,15 @@ English · [简体中文](./README.md)
 pnpm exec dsh plugin --profile web add <path-to-this-repo>   # local checkout
 pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 ```
+
+> **Desktop app**: the `desktop` profile is managed exclusively by the Electron application. The
+> desktop-bundled dsh command (menu-bar "Manage dsh command", or
+> `resources\runtime\cli\bin\dsh.cmd`) allows only the `plugin` subcommands against the desktop
+> profile — every other command (e.g. `--dump-config`) is refused. Install/update with the same
+> `dsh plugin --profile desktop add …` or through the app's plugin management UI, then restart the
+> app. Note pnpm 11's default 24-hour release-age gate blocks freshly published `0.2.0-rc.*`
+> versions: the desktop profile's `pnpm-workspace.yaml` needs a `minimumReleaseAgeExclude`
+> whitelist (same list as this repo) to resolve the newest prerelease (ADR-0007).
 
 The package declares `dsh.bundle`, so `dsh plugin add` appends it to `dsh.profile.bundles` and mounts its own patch layer (`cordis.patch.yml`) automatically — no manual profile row. The layer is:
 
@@ -60,6 +69,23 @@ The bundle layer re-points the `web` row's `searchProvider` at `um-web-search` �
 > ⚠️ **Takeover window**: `enabled` ships `false`, so between the takeover and flipping the switch search is unavailable — the `web` row already points at this plugin, and a disabled plugin answers searches with `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. Enable `enabled` in the settings card right after installing.
 
 > **Migration note**: if you previously followed the old README and hand-inserted a row with `id: web-search-exa` into your profile's `cordis.patch.yml`, remove that row first — otherwise the bundle layer mounts alongside it and the plugin loads twice.
+
+## Migration (revised 0.7.0 window)
+
+- **DSH ≥ 0.2.0-rc.1 is required** (ADR-0007): the 0.1.7 family is no longer supported. The
+  original 0.7.0 window `>=0.1.7-alpha.2 <0.3.0` never matches the `0.2.0-rc.*` prereleases under
+  plain semver (a prerelease is only satisfied by a comparator of the same `[major,minor,patch]`
+  tuple), so on the 0.2.0 Desktop host pnpm resolved the plugin's runtime closure to
+  `0.1.7-rc.2` — a second, parallel copy of the DSH web runtime next to the host's
+  `0.2.0-rc.2`. This revision narrows the window to `>=0.2.0-rc.1 <0.3.0`, so reinstalls and
+  refreshes resolve to the host's own versions. On a 0.1.7 host the compatibility gate refuses
+  the revised package outright (fail-fast).
+- The test/dev baseline moved to `0.2.0-rc.2`: devDependencies and overrides migrated as a family;
+  the `SettingsFormModel` mirror in `tests/render.test.mjs` was re-verified line-for-line against
+  `dsh-client-ui-primitives@0.2.0-rc.2` (semantics unchanged).
+- The breaking changes from 0.6.x → 0.7.0 (settings namespace moved into the profile patch row
+  `config`, card rebuilt on the official primitives) remain in effect; see the 0.7.0 migration
+  notes below.
 
 ## Migration (0.6.x → 0.7.0)
 
@@ -177,7 +203,8 @@ version only.
   [ADR-0003](./.um.agents/constraints/ADR-0003-dev-version-chain.md),
   [ADR-0004](./.um.agents/constraints/ADR-0004-multi-source-strategy.md),
   [ADR-0005](./.um.agents/constraints/ADR-0005-playwright-visual-testing.md),
-  [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md);
+  [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md),
+  [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md);
   Parallel API facts: [research dossier](./.um.agents/constraints/parallel-search-research.md)
 
 ## Support

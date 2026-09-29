@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: single-track DSH 0.2.0 support (ADR-0007)** — the dependency
+  window narrows to `>=0.2.0-rc.1 <0.3.0` on every `@deepseek-ai/dsh*` peer and
+  dependency (`engines.dsh` likewise); DSH 0.1.7 and earlier are no longer
+  supported. Root cause of the dual-runtime state on DeepSeek Harness Desktop
+  0.2.0-rc.2: the previous window `>=0.1.7-alpha.2 <0.3.0` never matches the
+  `0.2.0-rc.*` prereleases under plain semver (a prerelease satisfies a range
+  only through a comparator of the same `[major,minor,patch]` tuple), so pnpm
+  resolved the plugin's whole runtime closure to `0.1.7-rc.2` while the Desktop
+  host runs `0.2.0-rc.2` — the compatibility gate passed anyway because it
+  compares with `includePrerelease: true`. `>=0.2.0-rc.1` carries the
+  `[0,2,0]` prerelease comparator, so the family resolves to the newest 0.2.0
+  prerelease (currently `0.2.0-rc.2`) and future `0.2.x` stables
+- Test/dev baseline aligned to `0.2.0-rc.2`: all `@deepseek-ai/*`
+  devDependencies and the `pnpm-workspace.yaml` overrides family moved from
+  `0.1.7-alpha.2`, plus a `dsh-llm: 0.2.0-rc.2` override (pnpm resolved it to
+  `0.2.0-rc.1` while `dsh-web`'s peer spec is exact `0.2.0-rc.2`); the
+  `SettingsFormModel` mirror in `tests/render.test.mjs` was re-verified
+  line-for-line against `dsh-client-ui-primitives@0.2.0-rc.2`
+  (`lib/index.js:7104-7377` — semantics unchanged, only references updated)
+- `pnpm-workspace.yaml` carries a `minimumReleaseAgeExclude` whitelist for the
+  `@deepseek-ai/*` `0.2.0-rc.2` family so fresh installs can resolve versions
+  published within pnpm's default 24-hour release-age gate
+
+### Fixed
+
+- Desktop profile installs now resolve the same package versions the Desktop
+  runtime carries (single `WebError` / seam family per process) instead of a
+  parallel `0.1.7-rc.2` closure
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
