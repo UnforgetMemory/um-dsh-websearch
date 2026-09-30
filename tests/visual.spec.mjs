@@ -304,6 +304,37 @@ test('an unparseable providers draft is refused instead of coerced to an empty l
 	expect(await state(page)).toMatchObject({ failed: false, dirty: false });
 });
 
+// ─── pre-write validation (the client-side mirror of the Host invariants) ───
+
+test('a doomed candidate is refused before the wire with a specific warning', async ({ page }) => {
+	await open(page);
+	// "ghost" passes the string schema but breaks the default-provider
+	// membership invariant the Host enforces on write; the card refuses it
+	// before scope.mutate and explains itself instead of failing opaquely.
+	await page.evaluate(() => window.__testLog.edit('defaultProvider', 'ghost'));
+	await saveButton(page).click();
+	await expect.poll(async () => (await state(page)).failed).toBe(true);
+	expect(await scopeCalls(page)).toEqual([]);
+	await expect(page.getByTestId('card-root')).toContainText('默认数据源「ghost」不在已配置的数据源中。');
+
+	// Discard clears both the drafts and the warning.
+	await page.evaluate(() => window.__testLog.discard());
+	await expect(page.getByTestId('card-root')).not.toContainText('不在已配置的数据源中');
+	expect(await state(page)).toMatchObject({ failed: false, dirty: false });
+});
+
+test('a duplicate provider id in the staged list is refused with its name', async ({ page }) => {
+	await open(page);
+	await page.evaluate(() => {
+		const providers = window.__testLog.state().providers;
+		window.__testLog.edit('providers', JSON.stringify([...providers, { ...providers[0] }]));
+	});
+	await saveButton(page).click();
+	await expect.poll(async () => (await state(page)).failed).toBe(true);
+	expect(await scopeCalls(page)).toEqual([]);
+	await expect(page.getByTestId('card-root')).toContainText('数据源 id「exa」出现了不止一次。');
+});
+
 // ─── pixels (this card's own regions only) ──────────────────────────────────
 
 test('pixels: default card', async ({ page }) => {

@@ -1161,6 +1161,92 @@ test("validation: the reset control clears a stored override through an unset op
 	assert.deepEqual(h.mutations[0].ops, [{ op: "unset", path: ["defaultProvider"] }]);
 });
 
+test("validation: a doomed candidate is refused before the wire with a specific message", async () => {
+	const h = makeHarness();
+	const face = h.face();
+	const next = [...h.state().providers, { ...h.state().providers[0] }];
+	face.edit("providers", JSON.stringify(next));
+	await face.save();
+	assert.deepEqual(h.mutations, [], "the Host would reject this candidate, so it never crosses the wire");
+	assert.equal(h.state().failed, true, "the refusal raises the failed flag so discard clears the drafts");
+	assert.equal(h.state().dirty, true, "the draft stays so the user can correct it");
+	assert.match(renderCard(h).plain, /Provider id "exa" is used more than once\./u);
+});
+
+test("validation: a ghost default provider is refused with its name", async () => {
+	const h = makeHarness();
+	h.face().edit("defaultProvider", "ghost");
+	await h.face().save();
+	assert.deepEqual(h.mutations, []);
+	assert.match(renderCard(h).plain, /Default provider "ghost" does not name a configured provider\./u);
+});
+
+test("validation: an out-of-range concurrency is refused before the wire", async () => {
+	const h = makeHarness();
+	// The number spec accepts any finite number; the Host schema rejects 20 with
+	// a raw schemastery message. The card refuses it with copy instead.
+	h.face().edit("concurrency", "20");
+	await h.face().save();
+	assert.deepEqual(h.mutations, []);
+	assert.match(renderCard(h).plain, /Concurrency must be a whole number from 1 to 8\./u);
+});
+
+test("validation: discarding a refused save clears the banner and the drafts", async () => {
+	const h = makeHarness();
+	const face = h.face();
+	face.edit("defaultProvider", "ghost");
+	await face.save();
+	assert.match(renderCard(h).plain, /does not name a configured provider/u);
+	face.discard();
+	assert.doesNotMatch(renderCard(h).plain, /does not name a configured provider/u);
+	assert.equal(h.state().dirty, false);
+	assert.equal(h.state().failed, false);
+});
+
+test("compat: a committed object-shaped providers value renders the fallback and a warning", async () => {
+	const h = makeHarness({ snapshot: makeSnapshot({ providers: { exa: { displayName: "Exa" } } }) });
+	const view = renderCard(h);
+	assert.match(view.plain, /The stored provider list is an object, not an array/u);
+	assert.deepEqual(h.state().providers, [], "the incompatible value renders as the empty list, never a crash");
+	// The Host would reject ANY write to this section while the object shape
+	// stands (the whole document resolves through the schema), so the card
+	// refuses the doomed save instead of sending it.
+	h.face().edit("enabled", "true");
+	await h.face().save();
+	assert.deepEqual(h.mutations, []);
+	assert.equal(h.state().failed, true);
+});
+
+test("validation: a corrupt providers draft is refused before any write, with the banner", async () => {
+	// The pre-write validator judges the candidate; a corrupt structured draft
+	// HAS no candidate, so the whole save is refused up front — the earlier
+	// write-only handlers (enabled/cache) can never land without it.
+	const h = makeHarness();
+	h.face().edit("providers", "{not json");
+	await h.face().save();
+	assert.deepEqual(h.mutations, []);
+	assert.equal(h.state().failed, true);
+	assert.match(renderCard(h).plain, /not valid JSON/u, "the guard explains the refusal");
+	assert.equal(h.state().dirty, true, "the draft stays for the user to correct");
+});
+
+test("validation: an inert null entry in the committed list does not block unrelated saves", async () => {
+	// The Host validator skips null/non-object provider entries; the client-side
+	// mirror must refuse exactly what the Host would refuse, no more.
+	const h = makeHarness({ snapshot: makeSnapshot({ providers: [exaProvider(), null, parallelProvider(), deepseekProvider()] }) });
+	h.face().edit("enabled", "true");
+	await h.face().save();
+	assert.equal(h.mutations.length, 1, "the Host would accept this write, so the card must not refuse it");
+});
+
+test("providers: a hand-written provider id with surrounding whitespace is trimmed on save", async () => {
+	const h = makeHarness();
+	const next = [exaProvider({ id: " exa " }), parallelProvider(), deepseekProvider()];
+	h.face().edit("providers", JSON.stringify(next));
+	await h.face().save();
+	assert.equal(h.mutations[0].ops[0].value[0].id, "exa");
+});
+
 // ---- render smoke ------------------------------------------------------------
 
 test("render: the summary view is the row one-liner and the page view is the form", () => {
