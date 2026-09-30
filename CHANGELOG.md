@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The agent preset mount no longer fails with `expected object but got
+  [object Object],…`** (`planning` / `compaction` / `delegation` /
+  `cordis:group`). The pre-persist `internal/config` waterfall is GLOBAL —
+  `cordis.filter` is never installed, so every row in every subtree resolves
+  through every listener — and this plugin's listener ran its own schemastery
+  schema over the candidate unguarded. The agent presets mount `cordis:group`
+  entries whose config is an entry LIST (an array), so the schema rejected
+  those three rows, the preset mount audit failed, and the whole preset
+  stopped mounting. Non-object candidates now ride through untouched; a
+  regression test pins the listener's pass-through contract
+
 ### Changed
 
 - **BREAKING: single-track DSH 0.2.0 support (ADR-0007)** — the dependency

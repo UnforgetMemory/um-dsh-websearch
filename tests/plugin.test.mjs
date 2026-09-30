@@ -683,6 +683,26 @@ test("apply: cross-field validation rides the pre-persist internal/config waterf
 	assert.throws(() => handler({ defaultProvider: "ghost" }, () => "next"), /does not name a configured provider/u);
 });
 
+test("apply: the internal/config waterfall is global, so foreign rows pass untouched", () => {
+	const { events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, {});
+	const handler = events.get("internal/config");
+	// Agent presets mount `cordis:group` entries whose config is an entry LIST.
+	// An array reaching the schema throws schemastery's "expected object but
+	// got [object Object],..." and kills the whole preset mount, so non-object
+	// candidates must ride through untouched.
+	const groupConfig = [
+		{ id: "plan-mode", name: "@deepseek-ai/dsh-plan-mode", config: { section: "x" } },
+		{ id: "compaction-basic", name: "@deepseek-ai/dsh-compaction-basic" },
+		{ id: "tool-result-pruner", name: "@deepseek-ai/dsh-compaction-tool-result-pruner", config: { thresholdChars: 8192 } }
+	];
+	assert.equal(handler(groupConfig, () => "next"), "next");
+	assert.equal(handler(null, () => "next"), "next");
+	assert.equal(handler("a string row", () => "next"), "next");
+	assert.equal(handler(42, () => "next"), "next");
+	// a foreign plain object resolves through the defaults and passes
+	assert.equal(handler({ unrelated: true }, () => "next"), "next");
+});
+
 test("apply: loader/volatile-update drops the derived state (cache + prime)", async () => {
 	const creds = { [pkg.UM_WS_EXA_API_KEY]: { value: "k" } };
 	const { registered, events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, creds);

@@ -71,6 +71,14 @@ house style（monorepo 内 `@deepseek-ai/dsh-*` 互依赖一律精确同版 pin�
 - 刷新后验证 profile 依赖闭包升至 0.2.0-rc.2；最终 UI 验证由用户重启桌面应用完成
   （ADR-0006 D5 声明的残余缺口：真实浏览器内卡片渲染，仍需人工在桌面端确认）。
 
+- 遗留验证缺口（2026-09-30 桌面首启发现）：**`internal/config` 全局瀑布缺陷（已修复）**——
+  `cordis.filter` 在运行时中从未安装，`internal/*` 监听器实际全局生效；0.7.0 的跨字段校验监听
+  无作用域过滤，对预设 `cordis:group` 行的**数组 config** 跑 schemastery object schema →
+  `expected object but got [object Object],…`（1/3/9 个元素 = planning/compaction/delegation）→
+  行激活失败 → `auditRows`/`mountPreset` 整体抛错 → 预设无法挂载。修复：监听器对非对象候选
+  （数组/原始值）直接放行（plugin.test 新增回归用例；此前 dsh017test 验证只到 install/import 层，
+  从未触发会话级预设挂载，故漏网）。
+
 ## 后果
 
 - **破坏性**：DSH `0.1.7` 线不再支持（0.7.x 用户须先升宿主 ≥ 0.2.0-rc.1 再刷新插件）。**版本沿用
