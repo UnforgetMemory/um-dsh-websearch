@@ -675,15 +675,21 @@ test("apply: cross-field validation rides the pre-persist internal/config waterf
 	const { events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, {});
 	const handler = events.get("internal/config");
 	assert.equal(typeof handler, "function");
+	// Dispatch binds `this` to the fiber being resolved, so the listener only
+	// speaks for rows composed from THIS plugin.
+	const ownFiber = { runtime: { name: pkg.name, Config: pkg.Config } };
 	// A duplicate provider id is refused before anything reaches the profile patch.
-	assert.throws(() => handler({ providers: [exaEntry(), { ...exaEntry(), id: "exa" }] }, () => "next"), /duplicate provider id "exa"/u);
+	assert.throws(() => handler.call(ownFiber, { providers: [exaEntry(), { ...exaEntry(), id: "exa" }] }, () => "next"), /duplicate provider id "exa"/u);
 	// The candidate is resolved through the schema first, so a sparse raw layer
 	// still validates against the defaults it would actually run with.
-	assert.equal(handler({ enabled: true }, () => "next"), "next");
-	assert.throws(() => handler({ defaultProvider: "ghost" }, () => "next"), /does not name a configured provider/u);
+	assert.equal(handler.call(ownFiber, { enabled: true }, () => "next"), "next");
+	assert.throws(() => handler.call(ownFiber, { defaultProvider: "ghost" }, () => "next"), /does not name a configured provider/u);
+	// A runtime that shares our schema (a wrapper that re-declares it) is still ours.
+	const wrapperFiber = { runtime: { name: "some-wrapper", Config: pkg.Config } };
+	assert.throws(() => handler.call(wrapperFiber, { providers: [exaEntry(), { ...exaEntry(), id: "exa" }] }, () => "next"), /duplicate provider id "exa"/u);
 });
 
-test("apply: the internal/config waterfall is global, so foreign rows pass untouched", () => {
+test("apply: the waterfall is scoped to this plugin, so foreign rows pass untouched", () => {
 	const { events } = applyWithConfig({ enabled: true, providers: [exaEntry()] }, {});
 	const handler = events.get("internal/config");
 	// Agent presets mount `cordis:group` entries whose config is an entry LIST.
@@ -695,12 +701,47 @@ test("apply: the internal/config waterfall is global, so foreign rows pass untou
 		{ id: "compaction-basic", name: "@deepseek-ai/dsh-compaction-basic" },
 		{ id: "tool-result-pruner", name: "@deepseek-ai/dsh-compaction-tool-result-pruner", config: { thresholdChars: 8192 } }
 	];
-	assert.equal(handler(groupConfig, () => "next"), "next");
-	assert.equal(handler(null, () => "next"), "next");
-	assert.equal(handler("a string row", () => "next"), "next");
-	assert.equal(handler(42, () => "next"), "next");
+	assert.equal(handler.call(undefined, groupConfig, () => "next"), "next");
+	assert.equal(handler.call(undefined, null, () => "next"), "next");
+	assert.equal(handler.call(undefined, "a string row", () => "next"), "next");
+	assert.equal(handler.call(undefined, 42, () => "next"), "next");
 	// a foreign plain object resolves through the defaults and passes
-	assert.equal(handler({ unrelated: true }, () => "next"), "next");
+	assert.equal(handler.call(undefined, { unrelated: true }, () => "next"), "next");
+	// THE Models-page collision: `llm-pi-ai` owns a dict-shaped `providers` key
+	// of its own (route → provider profile). While the listener imposed this
+	// section's schema on every plain-object row, every Models-page save and
+	// settings migration died on `$.providers expected array but got
+	// [object Object]`. A foreign row with that exact shape must pass.
+	const llmPiAiFiber = { runtime: { name: "@deepseek-ai/dsh-llm-pi-ai", Config: { "~standard": { validate: () => ({ value: {} }) } } } };
+	const llmPiAiSection = {
+		providers: {
+			sensenova: {
+				displayName: "商汤Token",
+				apiKeyEnv: "SENSENOVA_API_KEY",
+				api: "openai-completions",
+				baseURL: "https://token.sensenova.cn/v1",
+				models: [{ id: "deepseek-v4-flash", name: "deepseek-v4-flash", contextWindow: 1048576 }]
+			}
+		}
+	};
+	assert.equal(handler.call(llmPiAiFiber, llmPiAiSection, () => "next"), "next");
+	// a root fiber carries no runtime at all and is nobody's section
+	assert.equal(handler.call({}, llmPiAiSection, () => "next"), "next");
+});
+
+test("apply: a section that passes the schema but breaks an invariant fails the load", () => {
+	// The loader's init resolution runs the schema only, and the pre-persist
+	// waterfall does not exist yet while this entry is being resolved — so the
+	// load itself validates the invariants it is about to run with.
+	assert.throws(() => applyWithConfig({ enabled: true, providers: [exaEntry(), { ...exaEntry(), id: "exa" }] }), /duplicate provider id "exa"/u);
+	assert.throws(() => applyWithConfig({ enabled: true, defaultProvider: "ghost" }), /does not name a configured provider/u);
+});
+
+test("validateConfig: an emptied providers list names the builtin trio for membership", () => {
+	// `resolveOptions` serves the builtins when the persisted array is empty, so
+	// membership must not demand a persisted entry for the fallback default.
+	assert.equal(pkg.validateConfig({ providers: [], defaultProvider: "exa" }), undefined);
+	assert.throws(() => pkg.validateConfig({ providers: [], defaultProvider: "ghost" }), /does not name a configured provider/u);
 });
 
 test("apply: loader/volatile-update drops the derived state (cache + prime)", async () => {
