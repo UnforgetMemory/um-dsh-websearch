@@ -9,8 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **The agent preset mount no longer fails with `expected object but got
-  [object Object],…`** (`planning` / `compaction` / `delegation` /
+- **Configuring models on the Desktop Models page no longer fails with
+  `$.providers expected array but got [object Object]`**. The pre-persist
+  `internal/config` waterfall is GLOBAL — every row resolves through every
+  listener — and this plugin's listener imposed its own schemastery schema on
+  every plain-object candidate. `llm-pi-ai` (the official LLM-provider section
+  the Models page writes) names a dict-shaped `providers` key of its own, so
+  every Models-page save, settings migration, and volatile commit of a
+  dict-shaped section died on this plugin's array schema. The listener now
+  scopes itself to rows composed from THIS plugin: cordis `dispatch` binds
+  `this` to the fiber being resolved (the loader's own listeners discriminate
+  the same way), so the listener matches `this.runtime` against the exported
+  `Config` identity and the plugin name, and every foreign row rides through
+  untouched. Regression tests pin the llm-pi-ai pass-through, the wrapper
+  match, and the own-row enforcement; an end-to-end script drives the real
+  cordis dispatch (`.workbuddy/tmp/verify-scoped-waterfall.mjs`)
+- **A section that passes the schema but breaks a cross-field invariant now
+  fails its own load.** The loader's init resolution runs the schema only, and
+  the pre-persist waterfall does not exist yet while the entry itself is being
+  resolved, so a hand-written patch row with, say, duplicate provider ids
+  loaded fine and misbehaved at runtime. `apply` validates its resolved
+  section up front (fail loudly per the config rules), and `validateConfig`
+  now ranges the default-provider membership over the builtin trio when the
+  persisted `providers` list is empty — matching what `resolveOptions` serves
+  at runtime instead of rejecting an emptied list that names a builtin
+- The agent preset mount no longer fails with `expected object but got
+  [object Object],…` (`planning` / `compaction` / `delegation` /
   `cordis:group`). The pre-persist `internal/config` waterfall is GLOBAL —
   `cordis.filter` is never installed, so every row in every subtree resolves
   through every listener — and this plugin's listener ran its own schemastery
@@ -19,6 +43,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   those three rows, the preset mount audit failed, and the whole preset
   stopped mounting. Non-object candidates now ride through untouched; a
   regression test pins the listener's pass-through contract
+
+### Added
+
+- **Pre-write validation in the settings card.** The card now mirrors the
+  Host's cross-field invariants client-side (duplicate provider ids, empty
+  ids, duplicate key refs, credential-reference grammar, default-provider
+  membership) and adds the one range the Host schema would reject a save for
+  (concurrency 1–8). The whole document a save would produce — committed
+  section plus every planned op plus every coerced write-only draft — is
+  validated BEFORE anything is sent, so a doomed save is refused with a
+  specific bilingual warning instead of failing halfway at the Host with a raw
+  schemastery message and its section scalars already written (the form model
+  writes scalars before the write-only handlers run). A refused save raises
+  the failed flag — so discard still clears the drafts — and shows which id or
+  reference is at fault; provider ids are trimmed on save so benign
+  surrounding whitespace from a hand-written row no longer wedges the
+  trimmed-id invariant
+- **Compatibility feedback for a foreign-shaped stored `providers` value.** A
+  committed `providers` that is an object rather than an array (an older
+  format or a foreign writer) renders as the builtin fallback with a bilingual
+  warning tag instead of silently showing an empty list, and the card refuses
+  a save that would leave the object shape standing — the Host resolves the
+  whole document through the schema and would reject any write to that section
+  anyway
 
 ### Changed
 

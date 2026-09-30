@@ -90,7 +90,7 @@ pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 
 ## 配置
 
-设置在 **设置 → 插件 → UM 网页搜索** 卡片里编辑，落盘到 profile patch 中 `um-web-search` 行的 `config`。表单由插件导出的 `Config` schema 派生，可实时生效的字段声明为 volatile（`enabled`、`defaultProvider`、`concurrency`、`cache`、`providers`）——保存后无需重挂插件，下一次搜索即生效；跨字段不变量（provider id 唯一、key 引用唯一、`defaultProvider` 必须指向已配置的 provider）在写入前的 `internal/config` 瀑布里校验，被拒绝的写入不会落盘。
+设置在 **设置 → 插件 → UM 网页搜索** 卡片里编辑，落盘到 profile patch 中 `um-web-search` 行的 `config`。表单由插件导出的 `Config` schema 派生，可实时生效的字段声明为 volatile（`enabled`、`defaultProvider`、`concurrency`、`cache`、`providers`）——保存后无需重挂插件，下一次搜索即生效；跨字段不变量（provider id 唯一、key 引用唯一、`defaultProvider` 必须指向已配置的 provider）在写入前的 `internal/config` 瀑布里校验，被拒绝的写入不会落盘；该瀑布按 `this.runtime` 精确限定到本插件的行，不会误伤其他插件的 section（0.7.0 后修复：Models 页 `llm-pi-ai` 的 dict 形状 `providers` 曾被本插件的 array schema 误拒）。设置卡保存前还会在客户端镜像校验同一组不变量，非法候选在离开浏览器前即被拒绝并以双语警示说明具体原因，不会出现部分落盘。
 
 ### 全局组
 
