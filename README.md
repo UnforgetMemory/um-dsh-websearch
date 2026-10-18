@@ -68,11 +68,13 @@ MCP 传输使用协议版本 `2025-06-18`（JSON-RPC over streamable HTTP）；P
 
 | 依赖 | 要求 |
 | --- | --- |
-| DeepSeek Harness | **≥ 0.2.0-rc.1 且 < 0.3.0**（已在 Desktop 0.2.0-rc.2 实测；0.1.7 系列不再支持，见 [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md)） |
+| DeepSeek Harness | **≥ 0.2.0-rc.1 且 < 0.3.0**（已在 Desktop 0.2.1-rc.2 实测；0.1.7 系列不再支持，见 [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md) / [ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md)） |
 | Node.js | ≥ 20 |
 
-> ⚠️ **为什么不再支持 0.1.7**
-> 初版 0.7.0 的窗口 `>=0.1.7-alpha.2 <0.3.0` 在普通 semver 下匹配不到 `0.2.0-rc.*`（预发布版只被同 `[major,minor,patch]` 元组的比较器命中），宿主升到 0.2.0 桌面版后 pnpm 会把插件的运行时闭包解析到 `0.1.7-rc.2`，与宿主形成双份运行时副本。本修订收窄为 `>=0.2.0-rc.1 <0.3.0`，重装/刷新即与宿主同版；0.1.7 宿主上修订版会被兼容性门禁直接拒装（fail-fast）。
+> ⚠️ **为什么是 `>=0.2.0-rc.1 <0.3.0`，以及桌面升级后为什么要重装**
+> `0.1.7 → 0.2.0`：预发布版只被同 `[major,minor,patch]` 元组的比较器命中，旧窗口会把运行时闭包解析到 0.1.7-rc.2（ADR-0007）。
+> `0.2.0 → 0.2.1`：0.7.0 仍把官方包写在 `dependencies`，在 0.2.1 桌面版下闭包被钉在 0.2.0-rc.2；0.2.1 新增的「精确版本」兼容性 preflight 按 **profile 实际解析到的副本**判定，把 `web` 行整行禁用 → `ctx.web` 缺席 → `tool-web (@deepseek-ai/dsh-tool-web): waiting for web`（ADR-0008）。
+> 修复：官方包改为 **peer + dev-only**（profile 的 `autoInstallPeers: false` 使它们不进入依赖闭包），运行时由 DSH 安装目录提供，因此同一份包在 0.2.0 / 0.2.1 宿主都可用。**已安装旧版的桌面端必须「卸载 → 重装」**（hoisted 的官方副本不会自动消失）；重装会把插件行恢复为出厂配置，请在设置卡里重新填写一次。
 
 <a id="quickstart"></a>
 
@@ -113,7 +115,7 @@ pnpm exec dsh plugin --profile web add github:UnforgetMemory/um-dsh-websearch
 
 desktop profile 由 Electron 应用独占管理。桌面内置的 dsh 命令（菜单栏「Manage dsh command」安装，或 `resources\runtime\cli\bin\dsh.cmd`）只放行 `plugin` 子命令，其余命令（如 `--dump-config`）对 desktop profile 一律拒绝。桌面端安装/更新即走上述同款 `dsh plugin --profile desktop add …`，或在应用的插件管理 UI 里操作；装完重启桌面应用生效。
 
-<small>注意 pnpm 11 默认的 24 小时 release-age 门会拦住刚发布的 `0.2.0-rc.*`：桌面 profile 的 `pnpm-workspace.yaml` 需要 `minimumReleaseAgeExclude` 白名单（本仓库同款列表）才能解析到最新预发布版（[ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md)）。</small>
+<small>注意 pnpm 11 默认的 24 小时 release-age 门会拦住刚发布的 `0.2.1-rc.*`：桌面 profile 的 `pnpm-workspace.yaml` 需要 `minimumReleaseAgeExclude` 白名单（本仓库同款列表）才能解析到最新预发布版（[ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md)）。</small>
 
 <a id="config"></a>
 
@@ -274,9 +276,18 @@ pnpm dev:version:reset    # 还原为基版
 | 旧扁平配置键仍可兜底 | `preferred`、`exaEnabled`、`allowAnonymous`… 这组 0.6.0 之前的扁平键，在 `providers` 仍是出厂默认时会被读一次并合成 `providers[]`（零存储迁移）；新卡片保存过一次后，写回的正是合成结果，这些旧键即退化为**惰性残留**（设置服务无法清除非 volatile 键），不再影响行为 |
 | 卡片 UI 重建 | 自研 CSS / Modal / 手风琴 / 自研类名与像素基线全部退役，改用官方 primitives；交互入口与视觉呈现随之改变 |
 
-### 0.7.0 窗口修订
+### 0.7.0 窗口修订（ADR-0007）
 
 依赖窗口收窄为 `>=0.2.0-rc.1 <0.3.0`（0.1.7 系列不再支持）；测试/开发基线对齐 `0.2.0-rc.2` —— devDependencies 与 overrides 全族迁移，`SettingsFormModel` 镜像已对照 `dsh-client-ui-primitives@0.2.0-rc.2` 逐行复核（语义未变）。
+
+### 0.2.0 → 0.2.1 桌面版适配（ADR-0008）
+
+| 变更 | 影响 |
+| --- | --- |
+| 官方包不再随插件安装 | `dependencies` 清空，`@deepseek-ai/*` 只做 peer 声明；profile 的 `node_modules/@deepseek-ai` 下不再出现 `dsh-*` 副本，运行时一律使用 DSH 安装目录自带版本 |
+| 必须「卸载 → 重装」 | 旧安装已在 profile 里 hoist 了 0.2.0-rc.2 官方包，只升级版本不会清除；请在插件管理 UI（或 `dsh plugin --profile desktop remove` 后 `add`）重装，再重启桌面应用 |
+| 重装后设置回落出厂 | 卸载会移除 `um-web-search` 行及其 `config`；重装后请在 **设置 → 插件 → UM 网页搜索** 重新填写一次 providers / 密钥引用 |
+| 无代码或补丁层迁移 | `cordis.patch.yml` 的行覆盖语义、设置命名空间 `um-web-search`、`web` 行接管行为均不变 |
 
 <a id="adr"></a>
 
@@ -291,6 +302,7 @@ pnpm dev:version:reset    # 还原为基版
 | [ADR-0005](./.um.agents/constraints/ADR-0005-playwright-visual-testing.md) | Playwright 真实视觉交互测试选型 |
 | [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md) | DSH 0.1.7 适配：设置子系统重写 + 官方 primitives 卡片重建 |
 | [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md) | DSH 0.2.0-rc.2 单线收窄：桌面版对齐 + semver 预发布解析缺陷修复 |
+| [ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md) | DSH 0.2.1-rc.2 适配：官方包 peer/dev-only，消除 profile 依赖闭包（`waiting for web` 根因） |
 | [Parallel 接口调研档案](./.um.agents/constraints/parallel-search-research.md) | Parallel REST / MCP 的形态对照、与 Exa 的差异与风险点 |
 | [硬编码语义索引](./.um.agents/constraints/hardcode-index.md) | 全部硬编码值的短路径登记表，升级时按短路径逐处同步 |
 

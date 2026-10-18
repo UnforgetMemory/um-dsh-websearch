@@ -1,4 +1,5 @@
-# 本文件是用户侧可选覆盖模板（DSH ≥ 0.1.7-alpha.2，插件 0.7.0 起）。
+# 本文件是用户侧可选覆盖模板（DSH 0.2.x；插件 0.7.0 起；官方包自 0.7.x Unreleased
+# 起改为 peer/dev-only，profile 内不再有官方副本，见 ADR-0008）。
 #
 # 插件作为 dsh.bundle 安装时，注册行（insert um-web-search → um-dsh-websearch）
 # 由包内 cordis.patch.yml 自动挂载，无需再手插；该 bundle 层同时把 base 的

@@ -68,11 +68,13 @@ Snippet caps are twofold: 700 characters on the request side, 800 characters ret
 
 | Dependency | Requirement |
 | --- | --- |
-| DeepSeek Harness | **≥ 0.2.0-rc.1 and < 0.3.0** (verified on Desktop 0.2.0-rc.2; the 0.1.7 family is no longer supported, see [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md)) |
+| DeepSeek Harness | **≥ 0.2.0-rc.1 and < 0.3.0** (verified on Desktop 0.2.1-rc.2; the 0.1.7 family is no longer supported, see [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md) / [ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md)) |
 | Node.js | ≥ 20 |
 
-> ⚠️ **Why 0.1.7 is no longer supported**
-> The original 0.7.0 window `>=0.1.7-alpha.2 <0.3.0` never matches the `0.2.0-rc.*` prereleases under plain semver (a prerelease is only satisfied by a comparator of the same `[major,minor,patch]` tuple), so on the 0.2.0 Desktop host pnpm resolved the plugin's whole runtime closure to `0.1.7-rc.2` — a second, parallel copy of the DSH web runtime next to the host's own. This revision narrows the window to `>=0.2.0-rc.1 <0.3.0`, so reinstalls and refreshes resolve to the host's versions; on a 0.1.7 host the compatibility gate refuses the revised package outright (fail-fast).
+> ⚠️ **Why the window is `>=0.2.0-rc.1 <0.3.0`, and why a Desktop upgrade needs a reinstall**
+> `0.1.7 → 0.2.0`: a prerelease is only matched by a comparator of the same `[major,minor,patch]` tuple, so the old window resolved the runtime closure to `0.1.7-rc.2` (ADR-0007).
+> `0.2.0 → 0.2.1`: 0.7.0 still listed the official packages in `dependencies`, so on the 0.2.1 Desktop the profile closure was pinned to `0.2.0-rc.2`; the new 0.2.1 exact-version preflight judges the **package the profile actually resolves**, disables the whole `web` row → `ctx.web` is never provided → `tool-web (@deepseek-ai/dsh-tool-web): waiting for web` (ADR-0008).
+> Fix: the official packages are now **peer + dev only** (the profile's `autoInstallPeers: false` keeps them out of the dependency closure) and resolve from the DSH installation at runtime, so one package works on both 0.2.0 and 0.2.1 hosts. **Existing Desktop installs must be removed and reinstalled** (hoisted official copies do not disappear by themselves); a reinstall restores the plugin row to factory config, so re-enter your settings once.
 
 <a id="quickstart"></a>
 
@@ -113,7 +115,7 @@ Installing takes over the default search backend and uninstalling restores the d
 
 The `desktop` profile is managed exclusively by the Electron application. The desktop-bundled dsh command (menu-bar "Manage dsh command", or `resources\runtime\cli\bin\dsh.cmd`) allows only the `plugin` subcommands against the desktop profile — every other command (e.g. `--dump-config`) is refused. Install or update with the same `dsh plugin --profile desktop add …` or through the app's plugin management UI, then restart the app.
 
-<small>Note that pnpm 11's default 24-hour release-age gate blocks freshly published `0.2.0-rc.*` versions: the desktop profile's `pnpm-workspace.yaml` needs a `minimumReleaseAgeExclude` whitelist (same list as this repo) to resolve the newest prerelease ([ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md)).</small>
+<small>Note that pnpm 11's default 24-hour release-age gate blocks freshly published `0.2.1-rc.*` versions: the desktop profile's `pnpm-workspace.yaml` needs a `minimumReleaseAgeExclude` whitelist (same list as this repo) to resolve the newest prerelease ([ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md)).</small>
 
 <a id="config"></a>
 
@@ -274,9 +276,18 @@ pnpm dev:version:reset    # return to the base version
 | Legacy flat keys still bridge the gap | While `providers` is still the factory default, the pre-0.6.0 flat keys (`preferred`, `exaEnabled`, `allowAnonymous`, …) are read once and synthesized into `providers[]` (a zero-storage migration). After the first save from the new card the written array IS that synthesis, so those keys become **inert leftovers** the settings service cannot even clear (they are not volatile) and stop affecting behaviour |
 | The card UI was rebuilt | The bespoke CSS, modal, accordion, class namespace, and pixel baselines are retired in favour of the official primitives, so both the interaction path and the visual presentation changed |
 
-### Revised 0.7.0 window
+### Revised 0.7.0 window (ADR-0007)
 
 The dependency window narrows to `>=0.2.0-rc.1 <0.3.0` (the 0.1.7 family is no longer supported); the test/dev baseline moves to `0.2.0-rc.2` — devDependencies and overrides migrated as a family, and the `SettingsFormModel` mirror was re-verified line-for-line against `dsh-client-ui-primitives@0.2.0-rc.2` (semantics unchanged).
+
+### 0.2.0 → 0.2.1 Desktop adaptation (ADR-0008)
+
+| Change | Effect |
+| --- | --- |
+| Official packages no longer ship with the plugin | `dependencies` is empty; `@deepseek-ai/*` is peer-declared only. The profile's `node_modules/@deepseek-ai` no longer carries any `dsh-*` copy, so every row resolves the DSH installation's own versions |
+| You must **uninstall → reinstall** | The old install hoisted the `0.2.0-rc.2` official packages into the profile; a version bump alone will not remove them. Reinstall via the plugin-management UI (or `dsh plugin --profile desktop remove` then `add`), then restart the Desktop app |
+| Settings fall back to factory defaults after reinstall | Uninstalling removes the `um-web-search` row and its `config`; re-enter providers and credential references once in **Settings → Plugins → UM Web Search** |
+| No code or patch-layer migration | The `cordis.patch.yml` row-override semantics, the `um-web-search` settings namespace, and the `web`-row takeover behaviour are unchanged |
 
 <a id="adr"></a>
 
@@ -291,6 +302,7 @@ The dependency window narrows to `>=0.2.0-rc.1 <0.3.0` (the 0.1.7 family is no l
 | [ADR-0005](./.um.agents/constraints/ADR-0005-playwright-visual-testing.md) | Choosing Playwright for real visual interaction tests |
 | [ADR-0006](./.um.agents/constraints/ADR-0006-dsh-017-adaptation.md) | Adapting to DSH 0.1.7: the settings subsystem rewrite and the card rebuild on the official primitives |
 | [ADR-0007](./.um.agents/constraints/ADR-0007-dsh-020-rc2-single-track.md) | Narrowing to the single DSH 0.2.0-rc.2 track: Desktop alignment and the semver prerelease resolution defect |
+| [ADR-0008](./.um.agents/constraints/ADR-0008-dsh-021-rc2-peer-only-closure.md) | Adapting to DSH 0.2.1-rc.2: official packages as peer/dev-only, dropping the profile dependency closure (the `waiting for web` root cause) |
 | [Parallel API research dossier](./.um.agents/constraints/parallel-search-research.md) | The Parallel REST / MCP shape, its differences from Exa, and the open risks |
 | [Hardcoded-semantics index](./.um.agents/constraints/hardcode-index.md) | Every hardcoded value with a short path, to be synced one by one on upgrade |
 
