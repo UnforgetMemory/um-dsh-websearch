@@ -472,29 +472,66 @@ test("state machine: random strategy with a single key is stable", async () => {
 	assert.deepEqual(headers, ["k"]);
 });
 
-// ---- ADR-0007 manifest contract -------------------------------------------
-// The support window is the shipped contract, and plain-semver resolution
-// (what pnpm uses) never matches 0.2.0-rc.* through a window that lacks a
-// `[0,2,0]` prerelease comparator — pin the exact range strings so a revert
-// to the old dual-track window cannot land silently.
-test("manifest: the dependency window matches the ADR-0007 single-track contract", async () => {
+// ---- ADR-0008 manifest contract -------------------------------------------
+// The 0.2.1 `tool-web … waiting for web` failure was structural, not a missing
+// API: a plugin whose profile closure carries official @deepseek-ai packages
+// makes the profile-local copy shadow the installation copy for DSH row-name
+// resolution, and the 0.2.1 exact-version preflight then disables every row
+// whose resolved manifest pins an older runtime (0.2.0-rc.2 peers against the
+// 0.2.1 runtime). The profile installs `autoInstallPeers: false`, so declaring
+// the official family as peer + dev only keeps the profile closure empty and
+// every row resolves the installation copy — always the host's own version.
+// These assertions pin that structure so a "fix by version pin" cannot land.
+const HOST_RUNTIME = "0.2.1-rc.2";
+const HOST_FAMILY_WINDOW = ">=0.2.0-rc.1 <0.3.0";
+
+function tupleOf(version) {
+	const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+	return match === null ? null : [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compareTuple(a, b) {
+	for (let index = 0; index < 3; index += 1) {
+		if (a[index] !== b[index]) return a[index] - b[index];
+	}
+	return 0;
+}
+
+test("manifest: official packages stay out of the runtime dependency closure (ADR-0008)", async () => {
 	const { readFileSync } = await import("node:fs");
 	const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-	const WINDOW = ">=0.2.0-rc.1 <0.3.0";
-	assert.equal(manifest.engines.dsh, WINDOW);
+	// The core invariant: no official package may be installed into the profile.
+	// If one is, it competes with the installation copy and the exact-version
+	// preflight decides row admission against the wrong manifest.
+	const runtimeDeps = Object.keys(manifest.dependencies ?? {});
+	assert.deepEqual(
+		runtimeDeps.filter((name) => name.startsWith("@deepseek-ai/")),
+		[],
+		"official @deepseek-ai packages must be peer + dev only; the DSH installation provides them at runtime (ADR-0008)"
+	);
+	// `engines.dsh` decides the compatibility preflight alone (peers are ignored
+	// when it is present), so it must stay the wide 0.2.x window and cover the
+	// live host runtime.
+	assert.equal(manifest.engines.dsh, HOST_FAMILY_WINDOW);
+	const bounds = /^>=(\S+) <(\S+)$/.exec(manifest.engines.dsh);
+	assert.ok(bounds !== null, `engines.dsh must be a ">=lower <upper" window, got ${manifest.engines.dsh}`);
+	const hostTuple = tupleOf(HOST_RUNTIME);
+	assert.ok(
+		compareTuple(hostTuple, tupleOf(bounds[1])) >= 0 && compareTuple(hostTuple, tupleOf(bounds[2])) < 0,
+		`engines.dsh ${manifest.engines.dsh} must cover the current host runtime ${HOST_RUNTIME}`
+	);
 	for (const [name, range] of Object.entries(manifest.peerDependencies)) {
-		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(range, WINDOW, `peer ${name}`);
+		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(range, HOST_FAMILY_WINDOW, `peer ${name}`);
 	}
-	for (const [name, range] of Object.entries(manifest.dependencies)) {
-		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(range, WINDOW, `dep ${name}`);
-	}
+	assert.equal(manifest.peerDependencies["@deepseek-ai/cordis"], ">=4.0.4 <5");
+	assert.equal(manifest.peerDependencies["@deepseek-ai/schemastery"], ">=3.18.4 <4");
 	for (const [name, version] of Object.entries(manifest.devDependencies)) {
-		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(version, "0.2.0-rc.2", `devDep ${name}`);
+		if (name.startsWith("@deepseek-ai/dsh-")) assert.equal(version, HOST_RUNTIME, `devDep ${name}`);
 	}
 	const workspace = readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8");
 	// dsh-llm must be overridden to rc.2 (pnpm resolves it to rc.1 while dsh-web's peer spec is exact rc.2)
-	assert.match(workspace, /'@deepseek-ai\/dsh-llm': 0\.2\.0-rc\.2/);
+	assert.match(workspace, /'@deepseek-ai\/dsh-llm': 0\.2\.1-rc\.2/);
 	// the rc.2 family must ride the release-age whitelist or fresh installs fall back to rc.1
 	assert.match(workspace, /minimumReleaseAgeExclude:/);
-	assert.match(workspace, /'@deepseek-ai\/dsh-web@0\.2\.0-rc\.2'/);
+	assert.match(workspace, /'@deepseek-ai\/dsh-web@0\.2\.1-rc\.2'/);
 });

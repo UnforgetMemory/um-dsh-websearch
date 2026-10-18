@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-18
+
 ### Fixed
 
 - **Configuring models on the Desktop Models page no longer fails with
@@ -92,12 +94,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pnpm-workspace.yaml` carries a `minimumReleaseAgeExclude` whitelist for the
   `@deepseek-ai/*` `0.2.0-rc.2` family so fresh installs can resolve versions
   published within pnpm's default 24-hour release-age gate
+- **Official packages are no longer runtime dependencies (ADR-0008)** —
+  `dependencies` is empty; `@deepseek-ai/cordis` (`>=4.0.4 <5`), `schemastery`
+  (`>=3.18.4 <4`), and the five DSH web/seam packages (`>=0.2.0-rc.1 <0.3.0`)
+  are peer-declared only, with the exact `0.2.1-rc.2` family kept in
+  devDependencies and in the `pnpm-workspace.yaml` overrides as the test
+  baseline. The profile's `autoInstallPeers: false` keeps peers out of the
+  profile dependency closure, so no official copy can shadow the installation
+  copy. Refreshes must **uninstall then reinstall**: a hoisted 0.2.0-rc.2
+  closure from an earlier install is not removed by a version bump alone
 
 ### Fixed
 
 - Desktop profile installs now resolve the same package versions the Desktop
   runtime carries (single `WebError` / seam family per process) instead of a
   parallel `0.1.7-rc.2` closure
+- **The plugin no longer breaks the DSH `web` seam on a 0.2.1 Desktop host
+  (`tool-web … waiting for web`)** (ADR-0008). The Desktop auto-updated to DSH
+  `0.2.1-rc.2` while the plugin still pinned the official family through
+  `dependencies: >=0.2.0-rc.1 <0.3.0`: under plain semver no comparator of the
+  `[0,2,1]` tuple exists, so pnpm installed the whole `0.2.0-rc.2` closure into
+  the profile. The 0.2.1 profile-resolution preflight judges each row by the
+  package the profile actually resolves (profile-local copies win over the
+  installation copy), and every `0.2.0-rc.2` official package carries exact
+  `0.2.0-rc.2` peers, so it disabled the `web` row outright (`dsh: disabling
+  profile plugin row "web": Plugin @deepseek-ai/dsh-web@0.2.0-rc.2 is
+  incompatible with dsh 0.2.1-rc.2`). `ctx.web` was never provided and every
+  dependent row stayed PENDING — `web-deepseek-api`, `web-fetch-http`, this
+  plugin's own `um-web-search`, and the preset-mounted `tool-web` (hence the
+  reported message). With the official packages peer/dev-only, every row
+  resolves the installation copy and the same package works on both
+  `0.2.0-rc.2` and `0.2.1-rc.2` hosts. No `lib/` or `cordis.patch.yml` change
+  was needed; `tests/boundary.test.mjs` now pins the empty runtime dependency
+  closure as a regression gate
 
 ## [0.7.0] - 2026-09-29
 
